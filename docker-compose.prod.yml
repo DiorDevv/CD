@@ -1,0 +1,83 @@
+# ============================================================
+#  Sentinel — PRODUCTION
+#  Bitta port (:8090) ortida: nginx SPA'ni beradi + /api ni backendga uzatadi.
+#  backend va db host'ga ochilmaydi.
+#
+#  Ishga tushirish:
+#    cp .env.prod.example .env.prod   # va qiymatlarni to'ldiring
+#    docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#
+#  Ochish:  http://<host>:8090
+# ============================================================
+name: sd-prod
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: sdp_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-soc}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD .env.prod da belgilanishi shart}
+      POSTGRES_DB: ${POSTGRES_DB:-soc_platform}
+    volumes:
+      - sdp_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-soc}"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  backend:
+    build:
+      context: ./backend
+      args:
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-}
+    image: sd-prod-backend
+    container_name: sdp_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env.prod
+    environment:
+      ENV: prod
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-soc}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-soc_platform}
+      EXPORT_DIR: /app/exports
+    # TLS reverse-proxy ortida to'g'ri sxema/IP ni ko'rish uchun
+    command: >
+      uvicorn app.main:app --host 0.0.0.0 --port 8000
+      --proxy-headers --forwarded-allow-ips=*
+    volumes:
+      - sdp_exports:/app/exports
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 25s
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_BASE_URL: /api
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-}
+    image: sd-prod-web
+    container_name: sdp_web
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8090}:80"
+
+volumes:
+  sdp_db_data:
+  sdp_exports:
