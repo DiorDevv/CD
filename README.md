@@ -116,10 +116,14 @@ docker compose -f docker-compose.prod.yml down          # (+ `-v` volume bilan)
 
 Portni o'zgartirish: `.env.prod` da `WEB_PORT=...`.
 
-**HTTPS:** `:8090` ni tashqi reverse-proxy (nginx/traefik/caddy) ortiga TLS bilan
-qo'ysangiz — `.env.prod` da `COOKIE_SECURE=true` qiling (aks holda refresh cookie
-HTTPS'da yuborilmaydi; HSTS ham shunda yoqiladi). Oddiy HTTP `:8090` uchun
-`COOKIE_SECURE=false` (standart).
+**HTTPS — Docker orqali (Caddy):** `docker-compose.tls.yml` qo'shimcha fayli Caddy
+konteynerini qo'shadi — 80/443 da turadi, `DOMAIN` uchun avtomatik Let's Encrypt
+sertifikat oladi, `web` (nginx) ga uzatadi (`:8090` yopiladi). `.env.prod` da
+`DOMAIN=...`, `COOKIE_SECURE=true`, `CORS_ORIGINS=https://...` va:
+```
+docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml --env-file .env.prod up -d --build
+```
+(Tashqi TLS terminator ishlatsangiz — faqat `COOKIE_SECURE=true` yetadi.)
 
 **Yangilash (qayta deploy):** `git pull` → yuqoridagi `up -d --build`. Migratsiyalar
 konteyner startida avtomatik (`alembic upgrade head`), ma'lumotlar volume'da qoladi.
@@ -130,8 +134,12 @@ VM to'g'ridan-to'g'ri internetga chiqmasa — build 3 qatlamda proksi orqali:
 Docker demoni, build vaqti (`apt`/`pip`/`npm`), runtime. Dockerfile'lar va
 compose fayllar `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` ni qabul qiladi; `.env`
 (yoki `.env.prod`) da to'ldiriladi (`NO_PROXY` ga `db`,`backend`,`web` qo'shiladi).
-Proksi umuman bo'lmasa — `docker save` / `docker load`. To'liq qadamlar:
-**[`deploy/PROKSI-VA-VM.md`](deploy/PROKSI-VA-VM.md)**.
+Proksi umuman bo'lmasa — air-gap bundle: internetli mashinada `./deploy/bundle.sh`
+→ arxivni VM'ga → `docker load` → `up --no-build`.
+
+**To'liq VM runbook:** **[`deploy/VM-DEPLOY.md`](deploy/VM-DEPLOY.md)** (0 dan:
+proksi, Docker, `.env.prod`, build, port, kirish, yangilash, backup, HTTPS, air-gap).
+Proksi mexanizmi tafsiloti: [`deploy/PROKSI-VA-VM.md`](deploy/PROKSI-VA-VM.md).
 
 ---
 
@@ -243,8 +251,13 @@ tiklash. Umumiy komponentlar: `pages/tables/ColumnFields.tsx` (ustun qoralamasi)
 SD/
 ├── docker-compose.yml           # dev (bind-mount, vite HMR, alohida portlar)
 ├── docker-compose.prod.yml      # prod (nginx :8090, backend/db yopiq)
-├── .env.example  /  .env.prod.example   # (proksi bloki bilan)
-├── deploy/PROKSI-VA-VM.md       # internetsiz VM (Squid proksi / air-gap)
+├── docker-compose.tls.yml       # + Caddy (HTTPS, Let's Encrypt) — prod ustiga
+├── .env.example  /  .env.prod.example   # (proksi + DOMAIN bloklari bilan)
+├── deploy/
+│   ├── VM-DEPLOY.md             # to'liq VM runbook (0 dan HTTPS gacha)
+│   ├── PROKSI-VA-VM.md          # internetsiz VM — proksi mexanizmi / air-gap
+│   ├── Caddyfile                # docker-compose.tls.yml uchun
+│   └── bundle.sh                # air-gap: image'larni bitta arxivga yig'ish
 ├── backend/
 │   ├── app/
 │   │   ├── config.py            # pydantic-settings

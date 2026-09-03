@@ -5,6 +5,25 @@ Almashtiring: `PROXY_HOST:3128` (Squid), `<VM-IP>` (VM manzili).
 
 ---
 
+## Hammasi Docker orqalimi?
+
+**Ha — deyarli hammasi.** Baza, backend, frontend/nginx, hatto HTTPS (Caddy) —
+barchasi `docker compose`. Host'da faqat quyidagilar qoladi:
+
+| Host ishi | Majburiymi? | Chetlab o'tish |
+|-----------|-------------|----------------|
+| Docker + compose plugin o'rnatish | Ha (yagona prerekvizit) | — |
+| Docker demoni proksisi (`http-proxy.conf`) | Internetsiz VM'da base image tortish uchun | **Air-gap bundle** — B yo'li (pastda), hech qanday proksi shart emas |
+| `openssl` (JWT kaliti) | Yo'q | konteynerда: `docker run --rm alpine sh -c "apk add -q openssl && openssl rand -hex 32"` |
+| Firewall / cloud security group | Portni tashqariga ochish uchun | — (Docker'dan tashqarida, provayder ishi) |
+
+Ikki yo'l:
+- **A — build VM'da** (Squid proksi bor): 1–8 bo'limlar.
+- **B — air-gap bundle** (proksi ham yo'q): internetli mashinada `deploy/bundle.sh`
+  → arxivni VM'ga → `docker load` → `up --no-build`. "B yo'li" bo'limiga qarang.
+
+---
+
 ## 0. VM ga ulanish
 
 ```bash
@@ -105,7 +124,12 @@ nano .env.prod
 `JWT_SECRET_KEY` ni tez qo'yish:
 
 ```bash
+# openssl bo'lsa:
 sed -i "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=$(openssl rand -hex 32)|" .env.prod
+
+# openssl yo'q bo'lsa — konteynerда:
+KEY=$(docker run --rm python:3.11-slim python -c "import secrets;print(secrets.token_hex(32))")
+sed -i "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=$KEY|" .env.prod
 ```
 
 ---
@@ -188,29 +212,62 @@ gunzip -c ~/backup-YYYY-MM-DD.sql.gz | \
 
 ---
 
-## 13. (Ixtiyoriy) Domen + HTTPS
+## 13. (Ixtiyoriy) Domen + HTTPS — **Docker orqali** (Caddy)
 
-`:8090` oldiga TLS tugatuvchi qo'ying — host nginx + certbot yoki Caddy.
+Host'ga hech narsa o'rnatmaysiz — `docker-compose.tls.yml` Caddy konteynerini
+qo'shadi: 80/443 da turadi, DOMEN uchun avtomatik Let's Encrypt sertifikat oladi,
+`web` (nginx) ga uzatadi. `web` ning `:8090` porti yopiladi — tashqariga faqat Caddy.
 
-1. DNS: `sentinel.example.com` → `<VM-IP>` (A yozuv)
-2. Host'da reverse-proxy (namuna: Caddy — avtomatik Let's Encrypt):
-
-   ```bash
-   sudo apt-get install -y caddy
-   sudo tee /etc/caddy/Caddyfile >/dev/null <<'EOF'
-   sentinel.example.com {
-       reverse_proxy 127.0.0.1:8090
-   }
-   EOF
-   sudo systemctl restart caddy
+1. **DNS:** `sentinel.example.com` → `<VM-IP>` (A yozuv)
+2. **Firewall:** 80 va 443 ochiq (`sudo ufw allow 80,443/tcp`), cloud SG da ham.
+   VM internetdan ko'rinishi shart (ACME tekshiruvi uchun).
+3. **`.env.prod`:**
+   ```ini
+   DOMAIN=sentinel.example.com
+   COOKIE_SECURE=true
+   CORS_ORIGINS=https://sentinel.example.com
    ```
-3. `.env.prod` da `COOKIE_SECURE=true` qiling va qayta ishga tushiring:
-
+4. **Ishga tushirish** (ikkала compose fayl bilan):
    ```bash
-   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+   docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml \
+     --env-file .env.prod up -d --build
    ```
-4. Endi faqat `https://sentinel.example.com`. 8090 portini tashqaridan yoping
-   (`sudo ufw delete allow 8090/tcp`), Caddy 80/443 ni ishlatadi.
+5. `docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml logs -f caddy`
+   — sertifikat olinganini kuting. So'ng: **`https://sentinel.example.com`**.
+   8090 ni tashqaridan yoping (`sudo ufw delete allow 8090/tcp`).
+
+> Keyingi har `up`/`logs`/`down` da ikkала `-f` faylni ham bering.
+
+---
+
+## B yo'li — air-gap bundle (proksi umuman yo'q)
+
+VM'da internet ham, Squid ham yo'q. Image'larni **internetli mashinada** yig'ib
+fayl orqali tashiysiz. Docker demoni proksisi (3-bo'lim) **kerak emas**.
+
+**Internetli mashinada** (repo klon qilingan):
+```bash
+./deploy/bundle.sh              # -> sentinel-bundle.tgz  (~300–400 MB)
+```
+
+**Arxivni VM'ga ko'chiring** (`scp sentinel-bundle.tgz foydalanuvchi@<VM-IP>:~/`),
+so'ng VM'da:
+```bash
+gunzip -c ~/sentinel-bundle.tgz | docker load
+
+git clone ... sentinel     # yoki repo'ni ham fayl orqali ko'chiring
+cd sentinel
+cp .env.prod.example .env.prod && nano .env.prod   # 5-bo'limдек to'ldiring
+                                                   # HTTP_PROXY/HTTPS_PROXY — BO'SH qoldiring
+
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --no-build
+```
+`--no-build` — hech narsa tortilmaydi/qurilmaydi, faqat `docker load` qilingan
+image'lardan ishga tushadi. Keyin 7–9 bo'limlar bir xil.
+
+HTTPS ham xohlasangiz: `docker compose -f docker-compose.prod.yml
+-f docker-compose.tls.yml --env-file .env.prod up -d --no-build` (bundle `caddy`
+image'ini ham o'z ichiga oladi).
 
 ---
 
@@ -218,9 +275,11 @@ gunzip -c ~/backup-YYYY-MM-DD.sql.gz | \
 
 | Belgi | Sabab / yechim |
 |-------|----------------|
-| `docker pull` osilib qoladi | Qatlam 1 (demon proksi) qilinmagan — 3-bo'lim |
+| `docker pull` osilib qoladi | Docker demoni proksisi (3-bo'lim) qilinmagan — yoki B yo'li (air-gap) |
 | build'da `pip`/`npm` timeout | `.env.prod` da `HTTP_PROXY/HTTPS_PROXY` bo'sh yoki noto'g'ri |
 | backend `db`ga ulanmaydi | `NO_PROXY` da `db` yo'q — 5-bo'limдаги qiymatni qo'ying |
-| login bo'ladi-yu, darhol chiqib ketadi | HTTPS ortida `COOKIE_SECURE=false` qolgan → `true` qiling |
+| login bo'ladi-yu, darhol chiqib ketadi | HTTPS ortida `COOKIE_SECURE=false` qolgan → `true` |
 | `POSTGRES_PASSWORD ... belgilanishi shart` | `.env.prod` da `POSTGRES_PASSWORD` bo'sh |
 | `sdp_web` unhealthy, lekin sayt ochiladi | eski build — `up -d --build` qayta qiling |
+| Caddy sertifikat ololmaydi | 80/443 tashqaridan yopiq yoki DNS noto'g'ri; VM internetdan ko'rinmaydi (ACME) |
+| `!reset` xato beradi (eski compose) | Docker Compose ≥ v2.24 kerak — `docker compose version` bilan tekshiring |

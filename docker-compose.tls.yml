@@ -1,0 +1,46 @@
+# ============================================================
+#  Sentinel — HTTPS qatlami (ixtiyoriy). docker-compose.prod.yml USTIGA qo'llanadi.
+#
+#  Caddy konteyneri 80/443 da turadi, DOMAIN uchun avtomatik Let's Encrypt
+#  sertifikat oladi va `web` (nginx) ga uzatadi. `web` ning :8090 host porti
+#  bekor qilinadi — tashqariga faqat Caddy chiqadi.
+#
+#  Shart:  .env.prod da DOMAIN=... va COOKIE_SECURE=true ; 80+443 portlari ochiq ;
+#          DNS: DOMAIN -> VM IP (A yozuv).
+#
+#  Ishga tushirish:
+#    docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml \
+#      --env-file .env.prod up -d --build
+# ============================================================
+name: sd-prod
+
+services:
+  web:
+    # tashqariga to'g'ridan ochmaymiz — faqat Caddy orqali
+    ports: !reset []
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: sdp_caddy
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_started
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?TLS uchun .env.prod da DOMAIN belgilanishi shart}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - sdp_caddy_data:/data
+      - sdp_caddy_config:/config
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  sdp_caddy_data:
+  sdp_caddy_config:

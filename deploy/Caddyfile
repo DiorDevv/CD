@@ -1,0 +1,7 @@
+# Sentinel — Caddy (docker-compose.tls.yml bilan). $DOMAIN env'dan olinadi.
+# Caddy DOMAIN uchun avtomatik Let's Encrypt sertifikat oladi (80/443 ochiq bo'lsin).
+
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy web:80
+}
