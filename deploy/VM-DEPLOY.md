@@ -5,6 +5,34 @@ Almashtiring: `PROXY_HOST:3128` (Squid), `<VM-IP>` (VM manzili).
 
 ---
 
+## ⚡ Eng oson yo'l — `vm-setup.sh`
+
+Docker o'rnatilgan bo'lsa, hammasi bitta buyruq: `.env.prod` (tasodifiy parollar
+bilan) yaratiladi, kerak bo'lsa demon proksisi sozlanadi, konteynerlar
+ko'tariladi, salomatlik kutiladi, URL + kirish ma'lumotlari chop etiladi.
+
+```bash
+git clone https://github.com/DiorDevv/CD.git sentinel && cd sentinel
+
+# internet bor VM:
+./deploy/vm-setup.sh
+
+# internetsiz VM (Squid):
+./deploy/vm-setup.sh --proxy http://PROXY_HOST:3128
+
+# ixtiyoriy: --port 9000 --admin-pass 'Mening_Parolim1' --no-build
+```
+
+So'ng: `sudo ufw allow 8090/tcp` (+ cloud security group) → `http://<VM-IP>:8090`.
+Yangilash: `./deploy/vm-update.sh`. Air-gap: pastdagi "B yo'li".
+
+> `.env.prod` allaqachon bo'lsa skript unga tegmaydi — mavjud qiymatlar ishlatiladi.
+> Docker yo'q bo'lsa skript kerakli `apt` buyrug'ini ko'rsatadi.
+
+Qo'lda qadamlar (skriptsiz yoki nozik sozlash uchun) — quyida.
+
+---
+
 ## Hammasi Docker orqalimi?
 
 **Ha — deyarli hammasi.** Baza, backend, frontend/nginx, hatto HTTPS (Caddy) —

@@ -137,6 +137,12 @@ compose fayllar `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` ni qabul qiladi; `.env`
 Proksi umuman bo'lmasa — air-gap bundle: internetli mashinada `./deploy/bundle.sh`
 → arxivni VM'ga → `docker load` → `up --no-build`.
 
+**Eng oson:** Docker o'rnatilgan VM'da bitta buyruq — `.env.prod` (tasodifiy
+parollar) yaratiladi, kerak bo'lsa demon proksisi sozlanadi, stack ko'tariladi:
+```bash
+./deploy/vm-setup.sh                              # internet bor
+./deploy/vm-setup.sh --proxy http://PROXY:3128    # internetsiz (Squid)
+```
 **To'liq VM runbook:** **[`deploy/VM-DEPLOY.md`](deploy/VM-DEPLOY.md)** (0 dan:
 proksi, Docker, `.env.prod`, build, port, kirish, yangilash, backup, HTTPS, air-gap).
 Proksi mexanizmi tafsiloti: [`deploy/PROKSI-VA-VM.md`](deploy/PROKSI-VA-VM.md).
@@ -254,6 +260,8 @@ SD/
 ├── docker-compose.tls.yml       # + Caddy (HTTPS, Let's Encrypt) — prod ustiga
 ├── .env.example  /  .env.prod.example   # (proksi + DOMAIN bloklari bilan)
 ├── deploy/
+│   ├── vm-setup.sh              # ⚡ bir buyruqli VM o'rnatuvchi (.env.prod + up)
+│   ├── vm-update.sh             # git pull + qayta build
 │   ├── VM-DEPLOY.md             # to'liq VM runbook (0 dan HTTPS gacha)
 │   ├── PROKSI-VA-VM.md          # internetsiz VM — proksi mexanizmi / air-gap
 │   ├── Caddyfile                # docker-compose.tls.yml uchun
