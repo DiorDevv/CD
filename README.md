@@ -93,16 +93,31 @@ so'rovlarini backendga uzatadi. `backend` va `db` host'ga **ochilmaydi**.
 Dev stekidan alohida: konteynerlar `sdp_*`, volume `sd-prod_sdp_db_data`,
 loyiha nomi `sd-prod` — dev bilan yonma-yon ishlaydi.
 
+**Eng oddiy — konfiguratsiyasiz (bitta buyruq):**
+
 ```bash
-# 1. Konfiguratsiya
-cp .env.prod.example .env.prod
-#   .env.prod da ALBATTA almashtiring:
-#     POSTGRES_PASSWORD, JWT_SECRET_KEY (openssl rand -hex 32), SUPERADMIN_PASSWORD
+docker compose -f docker-compose.prod.yml up -d --build
+```
 
-# 2. Qurish + ishga tushirish
+`.env.prod` bo'lmasa: `JWT_SECRET_KEY` va super admin paroli konteyner ichida bir
+marta generatsiya qilinib `sdp_secrets` volume'da saqlanadi. Parol backend
+loglarida chop etiladi:
+
+```bash
+docker compose -f docker-compose.prod.yml logs backend | grep -A1 "SUPER ADMIN"
+# yoki:  docker compose -f docker-compose.prod.yml exec backend cat /data/superadmin_password
+```
+
+**Kuchli parollarni o'zingiz belgilamoqchi bo'lsangiz:**
+
+```bash
+cp .env.prod.example .env.prod        # POSTGRES_PASSWORD, JWT_SECRET_KEY, SUPERADMIN_PASSWORD
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+```
 
-# holat / loglar / to'xtatish
+Holat / loglar / to'xtatish:
+
+```bash
 docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs -f
 docker compose -f docker-compose.prod.yml down          # (+ `-v` volume bilan)
@@ -114,7 +129,7 @@ docker compose -f docker-compose.prod.yml down          # (+ `-v` volume bilan)
 | API   | http://localhost:8090/api |
 | Health | http://localhost:8090/health |
 
-Portni o'zgartirish: `.env.prod` da `WEB_PORT=...`.
+Portni o'zgartirish: `WEB_PORT=9000 docker compose ...` yoki `.env.prod` da.
 
 **HTTPS — Docker orqali (Caddy):** `docker-compose.tls.yml` qo'shimcha fayli Caddy
 konteynerini qo'shadi — 80/443 da turadi, `DOMAIN` uchun avtomatik Let's Encrypt

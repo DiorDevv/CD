@@ -3,8 +3,9 @@
 #  Air-gap bundle — internetli mashinada prod image'larni bitta arxivga yig'adi.
 #  VM'da (internet/proksi shart emas):
 #     gunzip -c sentinel-bundle.tgz | docker load
-#     docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --no-build
-#  (HTTPS bilan: yuqoridagiga  -f docker-compose.tls.yml  qo'shing)
+#     docker compose -f docker-compose.prod.yml up -d --no-build
+#  (.env.prod shart emas — maxfiy qiymatlar konteynerда generatsiya qilinadi;
+#   HTTPS bilan: yuqoridagiga  -f docker-compose.tls.yml  qo'shing)
 # ============================================================
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -29,4 +30,4 @@ docker save sd-prod-backend sd-prod-web postgres:16-alpine caddy:2-alpine \
 echo "==> Tayyor: $OUT ($(du -h "$OUT" | cut -f1))"
 echo "    VM'ga ko'chiring, so'ng:"
 echo "      gunzip -c $OUT | docker load"
-echo "      docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --no-build"
+echo "      docker compose -f docker-compose.prod.yml up -d --no-build"

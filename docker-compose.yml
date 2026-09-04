@@ -28,14 +28,17 @@ services:
       db:
         condition: service_healthy
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-soc}:${POSTGRES_PASSWORD:-soc}@db:5432/${POSTGRES_DB:-soc_platform}
+      SECRETS_DIR: /data
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ./backend:/app
       - sd_exports:/app/exports
+      - sd_secrets:/data
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
       interval: 10s
@@ -66,3 +69,4 @@ services:
 volumes:
   db_data:
   sd_exports:
+  sd_secrets:

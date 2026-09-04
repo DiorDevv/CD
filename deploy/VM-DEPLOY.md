@@ -5,31 +5,39 @@ Almashtiring: `PROXY_HOST:3128` (Squid), `<VM-IP>` (VM manzili).
 
 ---
 
-## ⚡ Eng oson yo'l — `vm-setup.sh`
+## ⚡ Eng oson
 
-Docker o'rnatilgan bo'lsa, hammasi bitta buyruq: `.env.prod` (tasodifiy parollar
-bilan) yaratiladi, kerak bo'lsa demon proksisi sozlanadi, konteynerlar
-ko'tariladi, salomatlik kutiladi, URL + kirish ma'lumotlari chop etiladi.
+**Internet bor VM** — Docker o'rnatilgan bo'lsa, tom ma'noda 2 buyruq:
 
 ```bash
 git clone https://github.com/DiorDevv/CD.git sentinel && cd sentinel
-
-# internet bor VM:
-./deploy/vm-setup.sh
-
-# internetsiz VM (Squid):
-./deploy/vm-setup.sh --proxy http://PROXY_HOST:3128
-
-# ixtiyoriy: --port 9000 --admin-pass 'Mening_Parolim1' --no-build
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-So'ng: `sudo ufw allow 8090/tcp` (+ cloud security group) → `http://<VM-IP>:8090`.
-Yangilash: `./deploy/vm-update.sh`. Air-gap: pastdagi "B yo'li".
+`.env.prod` **shart emas** — `JWT_SECRET_KEY` va super admin paroli konteyner
+ichida generatsiya qilinib `sdp_secrets` volume'da saqlanadi. Parol:
 
-> `.env.prod` allaqachon bo'lsa skript unga tegmaydi — mavjud qiymatlar ishlatiladi.
-> Docker yo'q bo'lsa skript kerakli `apt` buyrug'ini ko'rsatadi.
+```bash
+docker compose -f docker-compose.prod.yml logs backend | grep -A1 "SUPER ADMIN"
+```
 
-Qo'lda qadamlar (skriptsiz yoki nozik sozlash uchun) — quyida.
+So'ng `sudo ufw allow 8090/tcp` (+ cloud SG) → `http://<VM-IP>:8090`.
+
+**Internetsiz VM (Squid)** yoki tasodifiy o'rniga aniq parol xohlasangiz —
+`vm-setup.sh`: Docker/proksini tekshiradi, `--proxy` berilса demon proksi faylini
+yozadi, `.env.prod` ni tasodifiy kuchli parollar bilan yaratadi, stack'ni
+ko'taradi, URL+parolni chop etadi:
+
+```bash
+./deploy/vm-setup.sh --proxy http://PROXY_HOST:3128
+#  ixtiyoriy: --port 9000 --admin-pass 'Mening_Parolim1' --no-build
+```
+
+Yangilash: `./deploy/vm-update.sh`. Air-gap (proksi ham yo'q): "B yo'li" (pastda).
+
+> `.env.prod` bo'lsa skript unga tegmaydi. Docker yo'q bo'lsa `apt` buyrug'ini ko'rsatadi.
+
+Qo'lda qadamlar — quyida.
 
 ---
 
