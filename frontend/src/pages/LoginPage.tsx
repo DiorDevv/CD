@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { ROLE_HOME } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -35,6 +36,8 @@ export function LoginPage() {
     <div className="relative grid min-h-screen place-items-center overflow-hidden bg-canvas px-4">
       <div className="pointer-events-none absolute inset-0 aurora" />
       <div className="pointer-events-none absolute inset-0 grid-bg opacity-60" />
+
+      <ThemeSwitcher className="absolute right-4 top-4 z-10" />
 
       <motion.div
         initial={{ opacity: 0, y: 16, scale: 0.98 }}

@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
+import { useTheme } from "@/lib/theme";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -31,6 +32,7 @@ function RootRedirect() {
 }
 
 export default function App() {
+  const { theme } = useTheme();
   return (
     <BrowserRouter>
       <ErrorBoundary>
@@ -78,13 +80,13 @@ export default function App() {
         </Routes>
 
         <Toaster
-          theme="dark"
+          theme={theme === "light" ? "light" : "dark"}
           position="bottom-right"
           toastOptions={{
             style: {
-              background: "hsl(228 16% 13%)",
-              border: "1px solid hsl(225 30% 100% / 0.14)",
-              color: "hsl(220 16% 92%)",
+              background: "hsl(var(--surface-overlay))",
+              border: "1px solid var(--line-strong)",
+              color: "hsl(var(--content))",
             },
           }}
         />

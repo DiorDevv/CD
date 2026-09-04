@@ -1,9 +1,17 @@
 <!doctype html>
-<html lang="uz" class="dark">
+<html lang="uz" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sentinel — SOC/DLP Platform</title>
+    <script>
+      // Saqlangan mavzuni birinchi bo'yoqdan oldin qo'llaymiz (miltillashsiz)
+      try {
+        var t = localStorage.getItem("sentinel-theme");
+        if (t === "light" || t === "dim" || t === "dark")
+          document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

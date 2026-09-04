@@ -6,6 +6,7 @@
    DIZAYN TOKEN'LARI (HSL kanallari — "H S% L%")
    ============================================================ */
 @layer base {
+  /* ---- QORA (standart) ---- */
   :root {
     --canvas: 240 20% 4%; /* #0a0a0f */
     --surface: 230 15% 8%; /* #111318 */
@@ -19,7 +20,7 @@
     --content-muted: 220 9% 64%;
     --content-faint: 222 10% 44%;
 
-    /* Standart aksent — neytral ko'k (Super Admin uchun ham shu) */
+    /* Standart aksent — neytral ko'k */
     --accent: 226 71% 63%;
     --accent-fg: 0 0% 100%;
 
@@ -30,7 +31,45 @@
     color-scheme: dark;
   }
 
-  /* Role bo'yicha aksent almashinuvi */
+  /* ---- OQ ---- */
+  :root[data-theme="light"] {
+    --canvas: 220 24% 97%; /* #f5f6f9 — kam yaltiroq */
+    --surface: 0 0% 100%;
+    --surface-raised: 220 30% 99%;
+    --surface-overlay: 220 18% 95%;
+
+    --line: hsl(224 24% 16% / 0.1);
+    --line-strong: hsl(224 24% 16% / 0.18);
+
+    --content: 224 24% 14%; /* #1b2130 */
+    --content-muted: 222 12% 38%;
+    --content-faint: 222 10% 52%;
+
+    --success: 152 56% 36%;
+    --danger: 356 66% 47%;
+    --warning: 32 88% 40%;
+
+    color-scheme: light;
+  }
+
+  /* ---- YUMSHOQ (dim) — desaturatsiyalangan slate ---- */
+  :root[data-theme="dim"] {
+    --canvas: 222 16% 12%; /* #191c22 */
+    --surface: 222 15% 15%;
+    --surface-raised: 222 14% 18%;
+    --surface-overlay: 222 14% 22%;
+
+    --line: hsl(220 30% 100% / 0.09);
+    --line-strong: hsl(220 30% 100% / 0.16);
+
+    --content: 216 14% 88%;
+    --content-muted: 218 9% 60%;
+    --content-faint: 220 9% 46%;
+
+    color-scheme: dark;
+  }
+
+  /* Role bo'yicha aksent almashinuvi (tema'dan mustaqil) */
   [data-role="soc"] {
     --accent: 213 92% 60%; /* ko'k */
   }
@@ -41,8 +80,14 @@
     --accent: 174 62% 47%; /* teal — kuzatuvchi */
   }
   [data-role="super_admin"] {
-    --accent: 226 20% 74%; /* neytral / oq-kulrang */
-    --accent-fg: 230 15% 8%;
+    --accent: 226 12% 52%; /* neytral kulrang — oq va qora fonda ham o'qiladi */
+    --accent-fg: 0 0% 100%;
+  }
+  :root[data-theme="light"] [data-role="dlp"] {
+    --accent: 265 70% 58%;
+  }
+  :root[data-theme="light"] [data-role="viewer"] {
+    --accent: 174 64% 38%;
   }
 
   * {
@@ -85,7 +130,7 @@
     background-clip: content-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(220 9% 40%);
+    background: hsl(var(--content-faint));
     background-clip: content-box;
   }
 }
