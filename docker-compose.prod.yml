@@ -3,8 +3,11 @@
 #  Bitta port (:8090) ortida: nginx SPA'ni beradi + /api ni backendga uzatadi.
 #  backend va db host'ga ochilmaydi.
 #
-#  Ishga tushirish (eng oddiy — .env.prod SHART EMAS):
+#  Ishga tushirish (internet bor server — .env.prod SHART EMAS):
 #    docker compose -f docker-compose.prod.yml up -d --build
+#  Internetsiz VM (Squid): proksini build'ga uzating —
+#    ./deploy/vm-setup.sh --proxy http://PROXY:3128
+#  yoki HTTP_PROXY=... HTTPS_PROXY=... NO_PROXY=...,db,backend,web docker compose ... up -d --build
 #  Kuchli parollarni o'zingiz belgilamoqchi bo'lsangiz:
 #    cp .env.prod.example .env.prod  # to'ldiring
 #    docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
@@ -63,7 +66,7 @@ services:
       - sdp_exports:/app/exports
       - sdp_secrets:/data
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 12

@@ -93,11 +93,21 @@ so'rovlarini backendga uzatadi. `backend` va `db` host'ga **ochilmaydi**.
 Dev stekidan alohida: konteynerlar `sdp_*`, volume `sd-prod_sdp_db_data`,
 loyiha nomi `sd-prod` — dev bilan yonma-yon ishlaydi.
 
-**Eng oddiy — konfiguratsiyasiz (bitta buyruq):**
+**Eng oddiy — konfiguratsiyasiz (internet bor server):**
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d --build
 ```
+
+> **Internetsiz VM (Squid ortida):** build vaqtida `pip`/`npm` proksi orqali
+> chiqishi kerak — proksини **build'ga uzatish** shart (aks holda `Ign:` xatolari):
+> ```bash
+> HTTP_PROXY=http://PROXY:3128 HTTPS_PROXY=http://PROXY:3128 \
+> NO_PROXY=localhost,127.0.0.1,::1,db,backend,web \
+> docker compose -f docker-compose.prod.yml up -d --build
+> ```
+> yoki `./deploy/vm-setup.sh --proxy http://PROXY:3128`. (Backend'da `apt` yo'q —
+> faqat `pip`; frontend build'да `npm ci`.)
 
 `.env.prod` bo'lmasa: `JWT_SECRET_KEY` va super admin paroli konteyner ichida bir
 marta generatsiya qilinib `sdp_secrets` volume'da saqlanadi. Parol backend
@@ -146,7 +156,7 @@ konteyner startida avtomatik (`alembic upgrade head`), ma'lumotlar volume'da qol
 ### Internetsiz VM (Squid proksi orqali)
 
 VM to'g'ridan-to'g'ri internetga chiqmasa — build 3 qatlamda proksi orqali:
-Docker demoni, build vaqti (`apt`/`pip`/`npm`), runtime. Dockerfile'lar va
+Docker demoni, build vaqti (`pip`/`npm`), runtime. Dockerfile'lar va
 compose fayllar `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` ni qabul qiladi; `.env`
 (yoki `.env.prod`) da to'ldiriladi (`NO_PROXY` ga `db`,`backend`,`web` qo'shiladi).
 Proksi umuman bo'lmasa — air-gap bundle: internetli mashinada `./deploy/bundle.sh`

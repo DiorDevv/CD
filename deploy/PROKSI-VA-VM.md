@@ -35,7 +35,11 @@ docker pull hello-world      # ishlashi kerak
 
 ---
 
-## Qatlam 2 — Build vaqti (`apt`, `pip`, `npm` — `RUN` ichida)
+## Qatlam 2 — Build vaqti (`pip`, `npm` — `RUN` ichida)
+
+> Backend Dockerfile'ida `apt` **yo'q** (barcha Python paketlari wheel bilan
+> keladi) — build faqat `pip` (backend) va `npm ci` (frontend) uchun proksi
+> talab qiladi.
 
 Bu loyihada allaqachon ulangan:
 
@@ -121,6 +125,6 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --no-build
 | Qatlam | Qayerda | Nima uchun |
 |--------|---------|-----------|
 | 1. Demon | `/etc/systemd/system/docker.service.d/http-proxy.conf` | `docker pull` base image'lar |
-| 2. Build | `.env` → compose `build.args` → Dockerfile `ARG/ENV` | `apt`, `pip`, `npm` |
+| 2. Build | `.env` → compose `build.args` → Dockerfile `ARG/ENV` | `pip` (backend), `npm ci` (frontend) |
 | 3. Runtime | (SD'da kerak emas) compose `environment:` | konteyner tashqi chaqiruvlari |
 | Air-gap | `docker save` / `docker load` + `up --no-build` | proksi ham bo'lmasa |

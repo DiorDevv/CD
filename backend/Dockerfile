@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-# --- Proksi (internetsiz VM: build vaqti apt/pip Squid orqali chiqadi) --------
+# --- Proksi (internetsiz VM: build vaqti pip Squid orqali chiqadi) -----------
 # .env -> docker-compose build.args -> shu ARG'lar. Bo'sh bo'lsa proksisiz.
 # NO_PROXY ga ichki compose hostlarini (db, backend, web) qo'shing.
 ARG HTTP_PROXY=
@@ -19,10 +19,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential libpq-dev curl \
-    && rm -rf /var/lib/apt/lists/*
-
+# apt kerak emas: asyncpg/bcrypt/pydantic-core — hammasi manylinux wheel bilan
+# keladi; libpq/psycopg ishlatilmaydi; healthcheck python bilan (curl'siz).
+# Shu tufayli internetsiz VM'da build faqat pip proksisini talab qiladi.
 COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
