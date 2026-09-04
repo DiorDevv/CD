@@ -6,88 +6,98 @@
    DIZAYN TOKEN'LARI (HSL kanallari — "H S% L%")
    ============================================================ */
 @layer base {
-  /* ---- QORA (standart) ---- */
+  /* ---- QORA (standart) — kontrast WCAG AA (matn ≥ 4.5:1) ---- */
   :root {
-    --canvas: 240 20% 4%; /* #0a0a0f */
-    --surface: 230 15% 8%; /* #111318 */
-    --surface-raised: 228 14% 11%;
-    --surface-overlay: 228 16% 13%;
+    --canvas: 240 18% 4%; /* #0a0a0e */
+    --surface: 230 14% 8%; /* #111218 */
+    --surface-raised: 228 13% 12%;
+    --surface-overlay: 228 14% 15%;
 
-    --line: hsl(225 30% 100% / 0.08);
-    --line-strong: hsl(225 30% 100% / 0.14);
+    --line: hsl(220 25% 100% / 0.1);
+    --line-strong: hsl(220 25% 100% / 0.18);
 
-    --content: 220 16% 92%;
-    --content-muted: 220 9% 64%;
-    --content-faint: 222 10% 44%;
+    --content: 220 15% 94%; /* ~15:1 */
+    --content-muted: 218 11% 70%; /* ~9:1 */
+    --content-faint: 220 10% 52%; /* ~5:1 — kichik matn ham o'qiladi */
 
-    /* Standart aksent — neytral ko'k */
-    --accent: 226 71% 63%;
+    /* Bazaviy aksent (login, parol sahifasi) — oq va qora fonда ham ishlaydi */
+    --accent: 224 70% 58%;
     --accent-fg: 0 0% 100%;
 
-    --success: 152 58% 45%;
-    --danger: 356 72% 58%;
-    --warning: 38 92% 55%;
+    --success: 152 62% 52%;
+    --danger: 356 76% 64%;
+    --warning: 36 94% 58%;
 
     color-scheme: dark;
   }
 
   /* ---- OQ ---- */
   :root[data-theme="light"] {
-    --canvas: 220 24% 97%; /* #f5f6f9 — kam yaltiroq */
+    --canvas: 220 20% 96%; /* #f1f3f6 — oq kartalar ajralib turishi uchun kulrangroq */
     --surface: 0 0% 100%;
-    --surface-raised: 220 30% 99%;
-    --surface-overlay: 220 18% 95%;
+    --surface-raised: 0 0% 100%; /* karta = oq, ko'tarilish soyada */
+    --surface-overlay: 220 16% 94%; /* menyu / hover — och kulrang */
 
-    --line: hsl(224 24% 16% / 0.1);
-    --line-strong: hsl(224 24% 16% / 0.18);
+    --line: hsl(220 20% 18% / 0.14); /* oq fonда ko'rinadigan chegara */
+    --line-strong: hsl(220 20% 18% / 0.24);
 
-    --content: 224 24% 14%; /* #1b2130 */
-    --content-muted: 222 12% 38%;
-    --content-faint: 222 10% 52%;
+    --content: 222 24% 12%; /* #171c28 — ~16:1 */
+    --content-muted: 220 11% 33%; /* #4a4f5b — ~7.6:1 */
+    --content-faint: 220 9% 43%; /* #636874 — ~5.3:1 (kichik matn AA) */
 
-    --success: 152 56% 36%;
-    --danger: 356 66% 47%;
-    --warning: 32 88% 40%;
+    --accent: 224 64% 48%; /* #2e5ec9 — oq matn bilan ~5:1 */
+
+    --success: 150 66% 30%; /* #1a9c5f — ~4.8:1 */
+    --danger: 356 70% 44%; /* #c22c39 — ~5.2:1 */
+    --warning: 30 82% 34%; /* #9e5c10 — ~5:1 (sof sariq oqда o'qilmaydi) */
 
     color-scheme: light;
   }
 
-  /* ---- YUMSHOQ (dim) — desaturatsiyalangan slate ---- */
+  /* ---- YUMSHOQ (dim) — desaturatsiyalangan slate, aniq matn ---- */
   :root[data-theme="dim"] {
-    --canvas: 222 16% 12%; /* #191c22 */
-    --surface: 222 15% 15%;
-    --surface-raised: 222 14% 18%;
-    --surface-overlay: 222 14% 22%;
+    --canvas: 220 13% 15%; /* #202329 — qoradan aniq farq qiladi */
+    --surface: 220 12% 18%;
+    --surface-raised: 220 11% 21%;
+    --surface-overlay: 220 11% 25%;
 
-    --line: hsl(220 30% 100% / 0.09);
-    --line-strong: hsl(220 30% 100% / 0.16);
+    --line: hsl(220 28% 100% / 0.12);
+    --line-strong: hsl(220 28% 100% / 0.2);
 
-    --content: 216 14% 88%;
-    --content-muted: 218 9% 60%;
-    --content-faint: 220 9% 46%;
+    --content: 216 14% 92%; /* yorqin — ~13:1 */
+    --content-muted: 217 11% 70%; /* ~7:1 */
+    --content-faint: 219 10% 54%; /* ~4.7:1 */
 
     color-scheme: dark;
   }
 
-  /* Role bo'yicha aksent almashinuvi (tema'dan mustaqil) */
+  /* Role aksenti — QORA/DIM: to'q fonда yorqin */
   [data-role="soc"] {
-    --accent: 213 92% 60%; /* ko'k */
+    --accent: 213 84% 60%;
   }
   [data-role="dlp"] {
-    --accent: 265 78% 66%; /* binafsha */
+    --accent: 264 72% 66%;
   }
   [data-role="viewer"] {
-    --accent: 174 62% 47%; /* teal — kuzatuvchi */
+    --accent: 174 58% 48%;
   }
   [data-role="super_admin"] {
-    --accent: 226 12% 52%; /* neytral kulrang — oq va qora fonda ham o'qiladi */
+    --accent: 224 12% 56%; /* neytral kulrang */
     --accent-fg: 0 0% 100%;
   }
+
+  /* Role aksenti — OQ: oq matn bilan ≥ 4.5:1 uchun to'qroq */
+  :root[data-theme="light"] [data-role="soc"] {
+    --accent: 213 66% 45%;
+  }
   :root[data-theme="light"] [data-role="dlp"] {
-    --accent: 265 70% 58%;
+    --accent: 264 50% 52%;
   }
   :root[data-theme="light"] [data-role="viewer"] {
-    --accent: 174 64% 38%;
+    --accent: 176 64% 29%;
+  }
+  :root[data-theme="light"] [data-role="super_admin"] {
+    --accent: 224 12% 40%;
   }
 
   * {
@@ -155,6 +165,12 @@
         transparent 55%
       ),
       radial-gradient(40rem 30rem at 50% 120%, hsl(213 92% 55% / 0.1), transparent 60%);
+  }
+  /* Oq fonда nur effektini yumshatamiz */
+  :root[data-theme="light"] .aurora {
+    background:
+      radial-gradient(60rem 40rem at 15% -10%, hsl(var(--accent) / 0.07), transparent 60%),
+      radial-gradient(50rem 40rem at 110% 20%, hsl(265 60% 55% / 0.05), transparent 55%);
   }
 
   .grid-bg {
