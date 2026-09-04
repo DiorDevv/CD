@@ -61,7 +61,7 @@ gen_hex() {
   fi
 }
 
-# --- 2. Docker demoni proksisi -----------------------------------------
+# --- 2. Proksi: (a) demon — image tortish uchun; (b) ./.env — build uchun ---
 if [ -n "$PROXY" ]; then
   say "Docker demoni proksisi sozlanmoqda ($PROXY)"
   sudo mkdir -p /etc/systemd/system/docker.service.d
@@ -70,6 +70,21 @@ if [ -n "$PROXY" ]; then
   sudo systemctl daemon-reload
   sudo systemctl restart docker
   sleep 2
+
+  # compose ./.env ni avtomatik o'qiydi -> build.args ga uzatiladi.
+  # Shundan keyin oddiy `docker compose ... up -d --build` proksisiz ham ishlaydi.
+  say "./.env ga proksi yozilmoqda (keyingi buildlar uchun)"
+  touch "$ROOT/.env"
+  e() {
+    if grep -q "^$1=" "$ROOT/.env" 2>/dev/null; then
+      sed -i "s|^$1=.*|$1=$2|" "$ROOT/.env"
+    else
+      printf '%s=%s\n' "$1" "$2" >> "$ROOT/.env"
+    fi
+  }
+  e HTTP_PROXY  "$PROXY"
+  e HTTPS_PROXY "$PROXY"
+  e NO_PROXY    "localhost,127.0.0.1,::1,db,backend,web,frontend"
 fi
 
 # --- 3. .env.prod -----------------------------------------------------

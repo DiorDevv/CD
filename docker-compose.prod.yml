@@ -3,11 +3,14 @@
 #  Bitta port (:8090) ortida: nginx SPA'ni beradi + /api ni backendga uzatadi.
 #  backend va db host'ga ochilmaydi.
 #
-#  Ishga tushirish (internet bor server — .env.prod SHART EMAS):
+#  Ishga tushirish — BITTA buyruq (.env.prod SHART EMAS):
 #    docker compose -f docker-compose.prod.yml up -d --build
-#  Internetsiz VM (Squid): proksini build'ga uzating —
-#    ./deploy/vm-setup.sh --proxy http://PROXY:3128
-#  yoki HTTP_PROXY=... HTTPS_PROXY=... NO_PROXY=...,db,backend,web docker compose ... up -d --build
+#
+#  Internetsiz VM (Squid) — BIR MARTA `.env` yarating, keyin AYNAN o'sha buyruq:
+#    printf 'HTTP_PROXY=http://PROXY:3128\nHTTPS_PROXY=http://PROXY:3128\nNO_PROXY=localhost,127.0.0.1,::1,db,backend,web\n' > .env
+#    docker compose -f docker-compose.prod.yml up -d --build
+#  (compose ./.env ni avtomatik o'qiydi -> build.args. Yoki: ./deploy/vm-setup.sh --proxy http://PROXY:3128)
+#
 #  Kuchli parollarni o'zingiz belgilamoqchi bo'lsangiz:
 #    cp .env.prod.example .env.prod  # to'ldiring
 #    docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build

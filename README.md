@@ -93,21 +93,21 @@ so'rovlarini backendga uzatadi. `backend` va `db` host'ga **ochilmaydi**.
 Dev stekidan alohida: konteynerlar `sdp_*`, volume `sd-prod_sdp_db_data`,
 loyiha nomi `sd-prod` — dev bilan yonma-yon ishlaydi.
 
-**Eng oddiy — konfiguratsiyasiz (internet bor server):**
+**BITTA buyruq (konfiguratsiyasiz):**
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-> **Internetsiz VM (Squid ortida):** build vaqtida `pip`/`npm` proksi orqali
-> chiqishi kerak — proksини **build'ga uzatish** shart (aks holda `Ign:` xatolari):
+> **Internetsiz VM (Squid ortida)** — bir marta `.env` yarating, keyin **aynan
+> o'sha bitta buyruq** ishlaydi (compose `./.env` ni avtomatik o'qiydi va build'ga
+> uzatadi):
 > ```bash
-> HTTP_PROXY=http://PROXY:3128 HTTPS_PROXY=http://PROXY:3128 \
-> NO_PROXY=localhost,127.0.0.1,::1,db,backend,web \
+> printf 'HTTP_PROXY=http://PROXY:3128\nHTTPS_PROXY=http://PROXY:3128\nNO_PROXY=localhost,127.0.0.1,::1,db,backend,web\n' > .env
 > docker compose -f docker-compose.prod.yml up -d --build
 > ```
-> yoki `./deploy/vm-setup.sh --proxy http://PROXY:3128`. (Backend'da `apt` yo'q —
-> faqat `pip`; frontend build'да `npm ci`.)
+> (yoki `./deploy/vm-setup.sh --proxy http://PROXY:3128` — u shu `.env` ni ham yozadi.
+> Backend'da `apt` yo'q — build faqat `pip`/`npm ci` uchun proksi ishlatadi.)
 
 `.env.prod` bo'lmasa: `JWT_SECRET_KEY` va super admin paroli konteyner ichida bir
 marta generatsiya qilinib `sdp_secrets` volume'da saqlanadi. Parol backend
