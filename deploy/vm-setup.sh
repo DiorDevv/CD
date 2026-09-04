@@ -3,19 +3,20 @@
 #  Sentinel — VM'da bir buyruqli o'rnatuvchi (HTTP, :8090)
 #
 #  Foydalanish (repo ildizidan yoki deploy/ ichidan):
-#    ./deploy/vm-setup.sh                              # internet bor VM
-#    ./deploy/vm-setup.sh --proxy http://10.0.0.5:3128 # internetsiz VM (Squid)
+#    ./deploy/vm-setup.sh                               # proksi Docker demonidan avtomatik olinadi
+#    ./deploy/vm-setup.sh --proxy http://10.0.0.5:3128  # proksini qo'lda berish
 #    ./deploy/vm-setup.sh --port 9000 --admin-pass 'Mening_Parolim1'
-#    ./deploy/vm-setup.sh --no-build                   # air-gap: oldindan `docker load` qilingan
+#    ./deploy/vm-setup.sh --no-build                    # air-gap: oldindan `docker load` qilingan
 #
 #  Nima qiladi:
 #    1. Docker + compose borligini tekshiradi
-#    2. --proxy berilsa: Docker demoni proksi faylini yozadi (sudo) + restart
+#    2. Proksi: --proxy berilmasa /etc/systemd/system/docker.service.d/http-proxy.conf
+#       dan avtomatik oladi; ./.env ga yozadi (compose build shu orqali chiqadi)
 #    3. .env.prod ni yaratadi (yo'q bo'lsa) — tasodifiy JWT/DB/admin parollari
 #    4. docker compose -f docker-compose.prod.yml up -d --build
 #    5. /health ni kutadi va URL + kirish ma'lumotlarini chop etadi
 #
-#  .env.prod ALLAQACHON bo'lsa — unga tegmaydi, mavjud qiymatlar ishlatiladi.
+#  .env / .env.prod ALLAQACHON bo'lsa — mos qatorlar yangilanadi, qolgani saqlanadi.
 # ============================================================
 set -euo pipefail
 
@@ -41,6 +42,14 @@ done
 say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31mXATO:\033[0m %s\n' "$*" >&2; exit 1; }
 
+# --proxy berilmasa — Docker demoni konfiguratsiyasidan avtomatik topamiz
+PROXY_AUTO=0
+DAEMON_PROXY_FILE=/etc/systemd/system/docker.service.d/http-proxy.conf
+if [ -z "$PROXY" ] && [ -r "$DAEMON_PROXY_FILE" ]; then
+  PROXY="$(sed -n 's/.*"HTTP_PROXY=\([^"]*\)".*/\1/p' "$DAEMON_PROXY_FILE" | head -1)"
+  [ -n "$PROXY" ] && { PROXY_AUTO=1; say "Proksi Docker demoni konfiguratsiyasidan olindi: $PROXY"; }
+fi
+
 # --- 1. Docker ------------------------------------------------------------
 command -v docker >/dev/null 2>&1 || die "Docker o'rnatilmagan. O'rnating:
   sudo apt-get update && sudo apt-get install -y docker.io docker-buildx docker-compose-v2 git
@@ -63,17 +72,19 @@ gen_hex() {
 
 # --- 2. Proksi: (a) demon — image tortish uchun; (b) ./.env — build uchun ---
 if [ -n "$PROXY" ]; then
-  say "Docker demoni proksisi sozlanmoqda ($PROXY)"
-  sudo mkdir -p /etc/systemd/system/docker.service.d
-  printf '[Service]\nEnvironment="HTTP_PROXY=%s"\nEnvironment="HTTPS_PROXY=%s"\nEnvironment="NO_PROXY=localhost,127.0.0.1,::1"\n' \
-    "$PROXY" "$PROXY" | sudo tee /etc/systemd/system/docker.service.d/http-proxy.conf >/dev/null
-  sudo systemctl daemon-reload
-  sudo systemctl restart docker
-  sleep 2
+  if [ "$PROXY_AUTO" = 0 ]; then
+    say "Docker demoni proksisi sozlanmoqda ($PROXY)"
+    sudo mkdir -p /etc/systemd/system/docker.service.d
+    printf '[Service]\nEnvironment="HTTP_PROXY=%s"\nEnvironment="HTTPS_PROXY=%s"\nEnvironment="NO_PROXY=localhost,127.0.0.1,::1"\n' \
+      "$PROXY" "$PROXY" | sudo tee "$DAEMON_PROXY_FILE" >/dev/null
+    sudo systemctl daemon-reload
+    sudo systemctl restart docker
+    sleep 2
+  fi
 
   # compose ./.env ni avtomatik o'qiydi -> build.args ga uzatiladi.
-  # Shundan keyin oddiy `docker compose ... up -d --build` proksisiz ham ishlaydi.
-  say "./.env ga proksi yozilmoqda (keyingi buildlar uchun)"
+  # Shundan keyin oddiy `docker compose ... up -d --build` ham ishlaydi.
+  say "./.env ga proksi yozilmoqda (build uchun)"
   touch "$ROOT/.env"
   e() {
     if grep -q "^$1=" "$ROOT/.env" 2>/dev/null; then
