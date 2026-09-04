@@ -42,7 +42,7 @@ import {
   DropdownSeparator,
   DropdownTrigger,
 } from "@/components/ui/dropdown";
-import { CellDisplay, CellEditor, RowFieldInput } from "@/pages/tables/cells";
+import { CellDisplay, CellEditor, CellErrorTooltip, RowFieldInput } from "@/pages/tables/cells";
 import { ColumnDialog } from "@/pages/tables/ColumnDialog";
 import { NewRowDialog } from "@/pages/tables/NewRowDialog";
 import { ImportDialog } from "@/pages/tables/ImportDialog";
@@ -760,11 +760,7 @@ export function TableGridPage() {
                             />
                           </button>
                         )}
-                        {errHere && (
-                          <p className="absolute left-0 top-full z-10 mt-0.5 rounded bg-danger px-1.5 py-0.5 text-2xs text-white shadow">
-                            {errHere}
-                          </p>
-                        )}
+                        {errHere && <CellErrorTooltip message={errHere} />}
                       </td>
                     );
                   })}

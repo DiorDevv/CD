@@ -1,10 +1,13 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
 } from "react";
+import { createPortal } from "react-dom";
 import { Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { cellText } from "@/lib/dynamic";
@@ -270,16 +273,71 @@ interface EditorProps {
   users: { id: string; username: string }[];
 }
 
-function useClickOutside(cb: () => void) {
-  const ref = useRef<HTMLDivElement>(null);
+// Katakning tahrirlagich popoverlari jadval ichida "absolute" bilan joylashtirilsa,
+// pastdagi qatorning tabiiy elementlari (masalan native <select>) ustiga chiqib
+// ketishi mumkin (jadval stacking context'i tufayli z-index yetarli bo'lmaydi).
+// Shu sabab portal orqali document.body'ga chiqarib, "fixed" bilan joylashtiramiz —
+// DropdownContent (components/ui/dropdown.tsx) qanday Radix Portal ishlatgan bo'lsa, shunga o'xshash.
+function FloatingBox({
+  anchorRef,
+  onOutsideClick,
+  className,
+  children,
+}: {
+  anchorRef: RefObject<HTMLElement>;
+  onOutsideClick?: () => void;
+  className?: string;
+  children: ReactNode;
+}) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+
+  const reposition = useCallback(() => {
+    const anchor = anchorRef.current;
+    const box = boxRef.current;
+    if (!anchor || !box) return;
+    const r = anchor.getBoundingClientRect();
+    const bw = box.offsetWidth;
+    const bh = box.offsetHeight;
+    let top = r.bottom + 4;
+    if (top + bh > window.innerHeight - 8) top = Math.max(8, r.top - bh - 4);
+    const left = Math.min(Math.max(8, r.left), window.innerWidth - bw - 8);
+    setCoords({ top, left });
+  }, [anchorRef]);
+
+  useLayoutEffect(() => {
+    reposition();
+  }, [reposition]);
+
   useEffect(() => {
+    window.addEventListener("scroll", reposition, true);
+    window.addEventListener("resize", reposition);
+    return () => {
+      window.removeEventListener("scroll", reposition, true);
+      window.removeEventListener("resize", reposition);
+    };
+  }, [reposition]);
+
+  useEffect(() => {
+    if (!onOutsideClick) return;
+    const close = onOutsideClick;
     function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) cb();
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) close();
     }
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [cb]);
-  return ref;
+  }, [onOutsideClick]);
+
+  return createPortal(
+    <div
+      ref={boxRef}
+      style={{ position: "fixed", top: coords?.top ?? -9999, left: coords?.left ?? -9999 }}
+      className={className}
+    >
+      {children}
+    </div>,
+    document.body,
+  );
 }
 
 function Popover({
@@ -289,24 +347,33 @@ function Popover({
   children: ReactNode;
   onClose: () => void;
 }) {
-  const ref = useClickOutside(onClose);
-  const [pos, setPos] = useState<"below" | "above">("below");
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    if (r.bottom > window.innerHeight - 8) setPos("above");
-  }, []);
+  const anchorRef = useRef<HTMLSpanElement>(null);
   return (
-    <div
-      ref={ref}
-      className={cn(
-        "absolute left-0 z-30 min-w-[200px] max-w-[320px] rounded-md border border-line-strong bg-surface-overlay p-1 shadow-overlay",
-        pos === "below" ? "top-full mt-1" : "bottom-full mb-1",
-      )}
-    >
-      {children}
-    </div>
+    <>
+      <span ref={anchorRef} className="pointer-events-none absolute inset-0" aria-hidden />
+      <FloatingBox
+        anchorRef={anchorRef}
+        onOutsideClick={onClose}
+        className="z-50 min-w-[200px] max-w-[320px] rounded-md border border-line-strong bg-surface-overlay p-1 shadow-overlay"
+      >
+        {children}
+      </FloatingBox>
+    </>
+  );
+}
+
+export function CellErrorTooltip({ message }: { message: string }) {
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  return (
+    <>
+      <span ref={anchorRef} className="pointer-events-none absolute inset-0" aria-hidden />
+      <FloatingBox
+        anchorRef={anchorRef}
+        className="z-50 rounded bg-danger px-1.5 py-0.5 text-2xs text-white shadow"
+      >
+        {message}
+      </FloatingBox>
+    </>
   );
 }
 
