@@ -14,15 +14,19 @@ interface BulkResult {
   errors: { index: number; errors: Record<string, string> }[];
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function ImportDialog({
   tableId,
   columns,
+  users,
   open,
   onOpenChange,
   onDone,
 }: {
   tableId: string;
   columns: DynamicColumn[];
+  users: { id: string; username: string }[];
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onDone: () => void;
@@ -43,21 +47,42 @@ export function ImportDialog({
   const parsed = useMemo(() => {
     if (!text.trim()) return null;
     const grid = parseCsv(text);
-    if (grid.length < 2) return { header: grid[0] ?? [], mapping: [], rows: [] as Record<string, unknown>[] };
+    if (grid.length < 2)
+      return { header: grid[0] ?? [], mapping: [], rows: [] as Record<string, unknown>[], warnings: [] as string[] };
     const header = grid[0].map((h) => h.trim());
     const byLabel = new Map(columns.map((c) => [c.label.trim().toLowerCase(), c]));
     const mapping = header.map((h) => byLabel.get(h.toLowerCase()) ?? null);
+
+    // qaysi qiymatlar variant/foydalanuvchiga yechilmadi — importdan oldin ogohlantiramiz
+    const optValues = new Map(
+      columns.map((c) => [c.key, new Set((c.config.options ?? []).map((o) => o.value))]),
+    );
+    const bad = new Map<string, string>(); // "Ustun › qiymat" -> sabab
+
     const rows = grid.slice(1).map((line) => {
       const data: Record<string, unknown> = {};
       mapping.forEach((col, i) => {
         if (!col) return;
-        const v = csvValueToCell(col, line[i] ?? "");
-        if (v !== undefined) data[col.key] = v;
+        const rawCell = (line[i] ?? "").trim();
+        const v = csvValueToCell(col, line[i] ?? "", users);
+        if (v === undefined) return;
+        data[col.key] = v;
+        if (rawCell === "") return;
+        const vals = optValues.get(col.key);
+        if ((col.type === "select") && vals && !vals.has(v as string))
+          bad.set(`${col.label} › ${rawCell}`, "variant ro'yxatda yo'q");
+        else if (col.type === "multi_select" && vals && Array.isArray(v) && v.some((x) => !vals.has(x as string)))
+          bad.set(`${col.label} › ${rawCell}`, "variant ro'yxatda yo'q");
+        else if (col.type === "user" && typeof v === "string" && !UUID_RE.test(v))
+          bad.set(`${col.label} › ${rawCell}`, "bunday foydalanuvchi topilmadi");
+        else if (col.type === "boolean" && typeof v !== "boolean")
+          bad.set(`${col.label} › ${rawCell}`, "ha/yo'q emas");
       });
       return data;
     });
-    return { header, mapping, rows };
-  }, [text, columns]);
+
+    return { header, mapping, rows, warnings: [...bad].map(([k, why]) => `${k} — ${why}`) };
+  }, [text, columns, users]);
 
   const matched = parsed?.mapping.filter(Boolean).length ?? 0;
 
@@ -139,6 +164,17 @@ export function ImportDialog({
                 <p className="mt-1.5 text-warning">
                   Hech bir sarlavha ustun nomiga mos kelmadi.
                 </p>
+              )}
+              {parsed.warnings.length > 0 && (
+                <div className="mt-1.5 text-warning">
+                  <p>{parsed.warnings.length} ta qiymat yechilmadi (bu kataklar bo'sh qo'shiladi yoki xato beradi):</p>
+                  <ul className="mt-0.5 space-y-0.5">
+                    {parsed.warnings.slice(0, 6).map((w) => (
+                      <li key={w} className="truncate">• {w}</li>
+                    ))}
+                    {parsed.warnings.length > 6 && <li>• …yana {parsed.warnings.length - 6}</li>}
+                  </ul>
+                </div>
               )}
             </div>
           )}

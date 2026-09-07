@@ -7,6 +7,7 @@ ta'rifiga (`DynamicColumn`) qarab tekshiriladi va standart ko'rinishga keltirila
 from __future__ import annotations
 
 import math
+import re
 import uuid
 from datetime import date, datetime, timezone
 from typing import Any
@@ -135,23 +136,40 @@ def _option_values(col: DynamicColumn) -> list[str]:
     return [str(o["value"]) for o in (col.config or {}).get("options", [])]
 
 
-def collect_user_refs(columns: list[DynamicColumn], payload: dict[str, Any]) -> set[uuid.UUID]:
-    """Payload ichidagi barcha `user` turidagi qiymatlarni UUID sifatida yig'adi."""
+def collect_user_values(columns: list[DynamicColumn], payload: dict[str, Any]) -> set[str]:
+    """`user` ustunlaridagi barcha xom qiymatlar (UUID yoki username) — matn sifatida."""
     by_key = {c.key: c for c in columns}
-    out: set[uuid.UUID] = set()
+    out: set[str] = set()
     for key, raw in payload.items():
         col = by_key.get(key)
         if col is None or col.type is not ColumnType.user or _is_blank(raw):
             continue
-        try:
-            out.add(uuid.UUID(str(raw)))
-        except (ValueError, TypeError):
-            continue
+        out.add(str(raw).strip())
     return out
 
 
-def coerce_value(col: DynamicColumn, raw: Any, *, known_user_ids: set[uuid.UUID]) -> Any:
-    """Bitta qiymatni tekshiradi/normallashtiradi. Xato bo'lsa `ValueError`."""
+def _option_label_map(col: DynamicColumn) -> dict[str, str]:
+    """label(lower) -> value — eksport label yozgani uchun importda ham tanish."""
+    out: dict[str, str] = {}
+    for o in (col.config or {}).get("options", []):
+        lbl = str(o.get("label", "")).strip().lower()
+        if lbl:
+            out.setdefault(lbl, str(o["value"]))
+    return out
+
+
+def coerce_value(
+    col: DynamicColumn,
+    raw: Any,
+    *,
+    known_user_ids: set[uuid.UUID],
+    known_usernames: dict[str, uuid.UUID] | None = None,
+) -> Any:
+    """Bitta qiymatni tekshiradi/normallashtiradi. Xato bo'lsa `ValueError`.
+
+    Import/CSV uchun: select/multi_select variant **label**ini ham, `user`
+    ustuni **username**ini ham qabul qiladi (eksport aynan shularni yozadi).
+    """
     t = col.type
 
     if _is_blank(raw):
@@ -213,18 +231,30 @@ def coerce_value(col: DynamicColumn, raw: Any, *, known_user_ids: set[uuid.UUID]
         opts = _option_values(col)
         val = str(raw)
         if val not in opts:
+            val = _option_label_map(col).get(val.strip().lower(), val)
+        if val not in opts:
             raise ValueError("tanlangan variant ustun ro'yxatida yo'q")
         return val
 
     if t is ColumnType.multi_select:
-        if not isinstance(raw, (list, tuple)):
+        values = set(_option_values(col))
+        by_label = _option_label_map(col)
+        if isinstance(raw, (list, tuple)):
+            items = [str(x).strip() for x in raw]
+        elif isinstance(raw, str):
+            # eksport "a, b" ko'rinishida yozadi; label ichida vergul bo'lsa
+            # butun satr bitta variant bo'lishi mumkin
+            if raw.strip().lower() in by_label or raw.strip() in values:
+                items = [raw.strip()]
+            else:
+                items = [p.strip() for p in re.split(r"[,;\n|]", raw) if p.strip()]
+        else:
             raise ValueError("bir nechta variant ro'yxati kutilgan")
-        opts = set(_option_values(col))
         seen: list[str] = []
-        for item in raw:
-            v = str(item)
-            if v not in opts:
-                raise ValueError(f"'{v}' varianti ustun ro'yxatida yo'q")
+        for item in items:
+            v = item if item in values else by_label.get(item.lower(), item)
+            if v not in values:
+                raise ValueError(f"'{item}' varianti ustun ro'yxatida yo'q")
             if v not in seen:
                 seen.append(v)
         if len(seen) > MAX_MULTI_SELECT:
@@ -232,13 +262,21 @@ def coerce_value(col: DynamicColumn, raw: Any, *, known_user_ids: set[uuid.UUID]
         return seen
 
     if t is ColumnType.user:
+        s = str(raw).strip()
+        uid: uuid.UUID | None
         try:
-            uid = uuid.UUID(str(raw))
+            uid = uuid.UUID(s)
         except (ValueError, TypeError):
-            raise ValueError("foydalanuvchi identifikatori noto'g'ri")
-        if uid not in known_user_ids:
-            raise ValueError("bunday foydalanuvchi mavjud emas")
-        return str(uid)
+            uid = None
+        if uid is not None:
+            if uid not in known_user_ids:
+                raise ValueError("bunday foydalanuvchi mavjud emas")
+            return str(uid)
+        # UUID emas — username bo'lishi mumkin (eksport username yozadi)
+        hit = (known_usernames or {}).get(s.lower())
+        if hit is None:
+            raise ValueError(f"foydalanuvchi topilmadi: {s}")
+        return str(hit)
 
     raise ValueError("noma'lum ustun turi")  # pragma: no cover
 
@@ -250,6 +288,7 @@ def validate_row_data(
     mode: str,  # "create" | "update"
     existing: dict[str, Any] | None,
     known_user_ids: set[uuid.UUID],
+    known_usernames: dict[str, uuid.UUID] | None = None,
 ) -> dict[str, Any]:
     """To'liq qatorni tekshiradi va saqlash uchun tayyor `data` dict qaytaradi.
 
@@ -286,7 +325,9 @@ def validate_row_data(
             continue
 
         try:
-            result[key] = coerce_value(col, raw, known_user_ids=known_user_ids)
+            result[key] = coerce_value(
+                col, raw, known_user_ids=known_user_ids, known_usernames=known_usernames
+            )
         except ValueError as exc:
             errors[key] = str(exc)
 

@@ -277,8 +277,14 @@ export function parseCsv(text: string): string[][] {
   return rows.filter((r) => r.some((c) => c.trim() !== ""));
 }
 
-/** CSV matn qiymatini ustun turiga mos qiymatga aylantiradi (import uchun). */
-export function csvValueToCell(col: DynamicColumn, raw: string): unknown {
+/** CSV matn qiymatini ustun turiga mos qiymatga aylantiradi (import uchun).
+ *  Eksport variant **label**ini va `user` uchun **username**ni yozadi — shu
+ *  sabab bu yerda ikkalasi ham (label/value, username/id) qabul qilinadi. */
+export function csvValueToCell(
+  col: DynamicColumn,
+  raw: string,
+  users?: { id: string; username: string }[],
+): unknown {
   const s = raw.trim();
   if (s === "") return undefined;
   switch (col.type) {
@@ -286,22 +292,35 @@ export function csvValueToCell(col: DynamicColumn, raw: string): unknown {
       const n = Number(s);
       return Number.isFinite(n) ? n : s;
     }
-    case "boolean":
-      return /^(1|true|ha|yes|on)$/i.test(s);
+    case "boolean": {
+      if (/^(1|true|ha|yes|on|✓|✔)$/i.test(s)) return true;
+      if (/^(0|false|yo['’]?q|yoq|no|off|-|—|✗)$/i.test(s)) return false;
+      return s; // tanib bo'lmadi — import xatosi ko'rinsin, jimgina false bo'lmasin
+    }
     case "select": {
       const o = col.config.options?.find(
-        (x) => x.value === s || x.label.toLowerCase() === s.toLowerCase(),
+        (x) => x.value === s || x.label.trim().toLowerCase() === s.toLowerCase(),
       );
       return o?.value ?? s;
     }
     case "multi_select": {
-      const parts = s.split(/[,;|]/).map((p) => p.trim()).filter(Boolean);
-      return parts.map((p) => {
-        const o = col.config.options?.find(
-          (x) => x.value === p || x.label.toLowerCase() === p.toLowerCase(),
+      const opts = col.config.options ?? [];
+      const match = (p: string) =>
+        opts.find(
+          (x) => x.value === p || x.label.trim().toLowerCase() === p.toLowerCase(),
         );
-        return o?.value ?? p;
-      });
+      // butun satr bitta variant bo'lishi mumkin (label ichida vergul bo'lsa)
+      const whole = match(s);
+      if (whole) return [whole.value];
+      const parts = s.split(/[,;|\n]/).map((p) => p.trim()).filter(Boolean);
+      return parts.map((p) => match(p)?.value ?? p);
+    }
+    case "user": {
+      if (!users) return s;
+      const u = users.find(
+        (x) => x.id === s || x.username.toLowerCase() === s.toLowerCase(),
+      );
+      return u?.id ?? s;
     }
     default:
       return s;

@@ -53,7 +53,7 @@ from app.services.dynamic_service import (
 )
 from app.services.dynamic_values import (
     RowValidationError,
-    collect_user_refs,
+    collect_user_values,
     normalize_column_config,
     validate_row_data,
 )
@@ -562,11 +562,37 @@ async def list_rows(
     )
 
 
-async def _known_user_ids(db: AsyncSession, ids: set[uuid.UUID]) -> set[uuid.UUID]:
-    if not ids:
-        return set()
-    res = await db.execute(select(User.id).where(User.id.in_(ids)))
-    return set(res.scalars().all())
+async def _user_directory(
+    db: AsyncSession, columns, payloads: list[dict],
+) -> tuple[set[uuid.UUID], dict[str, uuid.UUID]]:
+    """`user` ustunlaridagi havolalar uchun: (mavjud id'lar, username(lower)->id).
+
+    Import/CSV username yozadi — shuni ham id'ga yechish uchun."""
+    raw: set[str] = set()
+    for p in payloads:
+        raw |= collect_user_values(columns, p)
+    if not raw:
+        return set(), {}
+    ids: set[uuid.UUID] = set()
+    names: set[str] = set()
+    for rv in raw:
+        try:
+            ids.add(uuid.UUID(rv))
+        except (ValueError, TypeError):
+            names.add(rv)
+    known_ids: set[uuid.UUID] = set()
+    name_to_id: dict[str, uuid.UUID] = {}
+    if ids:
+        res = await db.execute(select(User.id).where(User.id.in_(ids)))
+        known_ids |= set(res.scalars().all())
+    if names:
+        res = await db.execute(
+            select(User.id, User.username).where(User.username.in_(names))
+        )
+        for uid, uname in res.all():
+            name_to_id[uname.lower()] = uid
+            known_ids.add(uid)
+    return known_ids, name_to_id
 
 
 @router.post("/{table_id}/rows", response_model=RowOut, status_code=status.HTTP_201_CREATED)
@@ -581,11 +607,11 @@ async def create_row(
     if table.is_archived:
         raise HTTPException(status.HTTP_409_CONFLICT, "Arxivlangan jadvalga qator qo'shib bo'lmaydi")
 
-    refs = collect_user_refs(table.columns, payload.data)
-    known = await _known_user_ids(db, refs)
+    known, usernames = await _user_directory(db, table.columns, [payload.data])
     try:
         data = validate_row_data(
-            table.columns, payload.data, mode="create", existing=None, known_user_ids=known
+            table.columns, payload.data, mode="create", existing=None,
+            known_user_ids=known, known_usernames=usernames,
         )
     except RowValidationError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"errors": exc.errors})
@@ -617,10 +643,7 @@ async def bulk_create_rows(
     if table.is_archived:
         raise HTTPException(status.HTTP_409_CONFLICT, "Arxivlangan jadvalga qator qo'shib bo'lmaydi")
 
-    all_refs: set[uuid.UUID] = set()
-    for raw in payload.rows:
-        all_refs |= collect_user_refs(table.columns, raw)
-    known = await _known_user_ids(db, all_refs)
+    known, usernames = await _user_directory(db, table.columns, list(payload.rows))
 
     good: list[dict] = []
     errors: list[dict] = []
@@ -628,7 +651,8 @@ async def bulk_create_rows(
         try:
             good.append(
                 validate_row_data(
-                    table.columns, raw, mode="create", existing=None, known_user_ids=known
+                    table.columns, raw, mode="create", existing=None,
+                    known_user_ids=known, known_usernames=usernames,
                 )
             )
         except RowValidationError as exc:
@@ -683,11 +707,11 @@ async def update_row(
                 "Bu qatorni boshqa birov o'zgartirdi. Sahifani yangilang.",
             )
 
-    refs = collect_user_refs(table.columns, payload.data)
-    known = await _known_user_ids(db, refs)
+    known, usernames = await _user_directory(db, table.columns, [payload.data])
     try:
         data = validate_row_data(
-            table.columns, payload.data, mode="update", existing=row.data, known_user_ids=known
+            table.columns, payload.data, mode="update", existing=row.data,
+            known_user_ids=known, known_usernames=usernames,
         )
     except RowValidationError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"errors": exc.errors})
@@ -744,11 +768,11 @@ async def restore_revision(
     if rev.data is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Bu reviziyada saqlangan ma'lumot yo'q")
 
-    refs = collect_user_refs(table.columns, rev.data)
-    known = await _known_user_ids(db, refs)
+    known, usernames = await _user_directory(db, table.columns, [rev.data])
     try:
         data = validate_row_data(
-            table.columns, rev.data, mode="create", existing=None, known_user_ids=known
+            table.columns, rev.data, mode="create", existing=None,
+            known_user_ids=known, known_usernames=usernames,
         )
     except RowValidationError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"errors": exc.errors})

@@ -977,6 +977,7 @@ export function TableGridPage() {
       <ImportDialog
         tableId={tableId}
         columns={sortedCols}
+        users={users}
         open={importOpen}
         onOpenChange={setImportOpen}
         onDone={() => {

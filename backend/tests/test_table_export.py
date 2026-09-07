@@ -193,6 +193,93 @@ async def test_export_audit(client, actors):
     assert "export_created" in {x["action"] for x in logs.json()["items"]}
 
 
+async def test_export_import_roundtrip(client, actors):
+    """Eksport qilingan CSV'ni o'zgartirmasdan qayta import qilib bo'ladi:
+    select/multi_select label'i va `user` username'i id'ga yechiladi."""
+    import csv as _csv
+    import io as _io
+
+    from sqlalchemy import select as _select
+
+    from app.models.user import User as _User
+
+    root = await _tok(client, "root_admin")
+    async with TestSession() as db:
+        root_id = str(
+            (await db.execute(_select(_User.id).where(_User.username == "root_admin"))).scalar_one()
+        )
+
+    t = (
+        await client.post(
+            "/api/tables",
+            headers=_h(root),
+            json={
+                "section": "soc",
+                "name": "Round trip",
+                "columns": [
+                    {"label": "Ism", "type": "text"},
+                    {
+                        "label": "Daraja",
+                        "type": "select",
+                        "config": {"options": [
+                            {"value": "low", "label": "Past"},
+                            {"value": "high", "label": "Yuqori"},
+                        ]},
+                    },
+                    {
+                        "label": "Teglar",
+                        "type": "multi_select",
+                        "config": {"options": [
+                            {"value": "a", "label": "Alfa"},
+                            {"value": "b", "label": "Beta"},
+                            {"value": "c", "label": "Gamma"},
+                        ]},
+                    },
+                    {"label": "Mas'ul", "type": "user"},
+                    {"label": "Faol", "type": "boolean"},
+                ],
+            },
+        )
+    ).json()
+    tid = t["id"]
+    key = {c["label"]: c["key"] for c in t["columns"]}
+
+    originals = [
+        {key["Ism"]: "Bir", key["Daraja"]: "high", key["Teglar"]: ["a", "b"],
+         key["Mas'ul"]: root_id, key["Faol"]: True},
+        {key["Ism"]: "Ikki", key["Daraja"]: "low", key["Teglar"]: ["c"], key["Faol"]: False},
+    ]
+    for data in originals:
+        r = await client.post(f"/api/tables/{tid}/rows", headers=_h(root), json={"data": data})
+        assert r.status_code == 201, r.text
+
+    r = await client.get(f"/api/tables/{tid}/export", headers=_h(root), params={"format": "csv"})
+    assert r.status_code == 200
+    grid = list(_csv.reader(_io.StringIO(r.content.decode("utf-8-sig"))))
+    header = grid[0]
+    body = [g for g in grid[1:] if any(c.strip() for c in g)]
+    assert len(body) == 2
+
+    # eksport kataklari (label / username) — bulk import'ga o'zgartirmasdan
+    rows_payload = [
+        {key[h]: v for h, v in zip(header, line) if v != ""} for line in body
+    ]
+    res = await client.post(f"/api/tables/{tid}/rows/bulk", headers=_h(root), json={"rows": rows_payload})
+    assert res.status_code == 201, res.text
+    j = res.json()
+    assert j["failed"] == 0, j["errors"]
+    assert j["created"] == 2
+
+    got = sorted(j["items"], key=lambda x: x["data"][key["Ism"]])
+    assert got[0]["data"][key["Daraja"]] == "high"
+    assert got[0]["data"][key["Teglar"]] == ["a", "b"]
+    assert got[0]["data"][key["Mas'ul"]] == root_id
+    assert got[0]["data"][key["Faol"]] is True
+    assert got[1]["data"][key["Daraja"]] == "low"
+    assert got[1]["data"][key["Teglar"]] == ["c"]
+    assert got[1]["data"].get(key["Faol"]) is False
+
+
 async def test_reconcile_orphans_after_restart(client, actors, monkeypatch):
     """Backend restart'ini taqlid qilamiz: 'running' da qolgan job'lar —
     cap ichidagilari qayta navbatga, ortiqchasi 'failed'."""
