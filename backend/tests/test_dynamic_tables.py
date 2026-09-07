@@ -393,6 +393,54 @@ async def test_table_touched_on_row_change(client, actors):
     assert after > before
 
 
+async def test_row_done_flag(client, actors):
+    """`__done` — ustunga bog'liq bo'lmagan qator holati: PATCH bilan
+    o'rnatiladi/olib tashlanadi, boshqa 'noma'lum kalit' xatosi bermaydi."""
+    root = await _tok(client, "root_admin")
+    t = (await _mk_table(client, root, "soc", "Topshiriqlar", columns=[
+        {"label": "Vazifa", "type": "text"},
+    ])).json()
+    tid, ka = t["id"], t["columns"][0]["key"]
+
+    row = (await client.post(
+        f"/api/tables/{tid}/rows", headers=_h(root), json={"data": {ka: "Ish"}}
+    )).json()
+    rid = row["id"]
+    assert "__done" not in row["data"]
+
+    # belgilaymiz
+    r = await client.patch(
+        f"/api/tables/{tid}/rows/{rid}", headers=_h(root),
+        json={"data": {"__done": True}, "expected_updated_at": row["updated_at"]},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["data"]["__done"] is True
+    assert r.json()["data"][ka] == "Ish"  # boshqa maydon saqlanadi
+
+    # bekor qilamiz -> kalit umuman qolmaydi
+    r2 = await client.patch(
+        f"/api/tables/{tid}/rows/{rid}", headers=_h(root),
+        json={"data": {"__done": False}, "expected_updated_at": r.json()["updated_at"]},
+    )
+    assert r2.status_code == 200, r2.text
+    assert "__done" not in r2.json()["data"]
+
+    # bulk import'da ham qabul qilinadi
+    b = await client.post(
+        f"/api/tables/{tid}/rows/bulk", headers=_h(root),
+        json={"rows": [{ka: "Ikki", "__done": True}]},
+    )
+    assert b.status_code == 201, b.text
+    assert b.json()["failed"] == 0
+    assert b.json()["items"][0]["data"]["__done"] is True
+
+    # haqiqiy noma'lum kalit hali ham xato beradi
+    bad = await client.post(
+        f"/api/tables/{tid}/rows", headers=_h(root), json={"data": {"yoq_kalit": 1}}
+    )
+    assert bad.status_code == 422
+
+
 async def test_user_directory(client, actors):
     tok = await _tok(client, "watcher")
     r = await client.get("/api/users/directory", headers=_h(tok))

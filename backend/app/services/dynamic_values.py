@@ -16,6 +16,9 @@ from app.models.dynamic import ColumnType, DynamicColumn
 
 MAX_TEXT = 500
 MAX_LONG_TEXT = 20_000
+
+# Ustunga bog'liq bo'lmagan qator holati kaliti ("bajarildi" belgisi)
+ROW_DONE_KEY = "__done"
 MAX_MULTI_SELECT = 100
 MAX_OPTIONS = 200
 
@@ -51,9 +54,6 @@ def normalize_column_config(col_type: ColumnType, config: object) -> dict[str, A
             raise ValueError("width butun son bo'lishi kerak")
         out["width"] = max(80, min(800, w))
 
-    # boolean: belgilanganda qator "bajarilgan" ko'rinishiga o'tsin (xira + chiziq)
-    if col_type is ColumnType.boolean and cfg.get("strike_done") is not None:
-        out["strike_done"] = bool(cfg["strike_done"])
 
     if col_type in _NEEDS_OPTIONS:
         raw_opts = cfg.get("options")
@@ -302,7 +302,9 @@ def validate_row_data(
     by_key = {c.key: c for c in columns}
     errors: dict[str, str] = {}
 
-    unknown = set(payload) - set(by_key)
+    # `__done` — ustunga bog'liq bo'lmagan qator holati ("bajarildi" belgisi).
+    # Ustun ro'yxatida yo'q, lekin ruxsat etilgan va bool sifatida saqlanadi.
+    unknown = set(payload) - set(by_key) - {ROW_DONE_KEY}
     for k in unknown:
         errors[k] = "noma'lum ustun"
 
@@ -310,7 +312,7 @@ def validate_row_data(
 
     keys_to_check = set(payload) if mode == "update" else set(by_key)
     for key in keys_to_check:
-        if key in unknown:
+        if key in unknown or key == ROW_DONE_KEY:
             continue
         col = by_key[key]
         provided = key in payload
@@ -341,8 +343,15 @@ def validate_row_data(
             if key in by_key and (by_key[key].config or {}).get("required") and result.get(key) is None:
                 errors.setdefault(key, f"'{by_key[key].label}' majburiy")
 
+    # `__done` qator holati — faqat true bo'lsa saqlanadi
+    if ROW_DONE_KEY in payload:
+        if payload[ROW_DONE_KEY]:
+            result[ROW_DONE_KEY] = True
+        else:
+            result.pop(ROW_DONE_KEY, None)
+
     if errors:
         raise RowValidationError(errors)
 
-    # faqat mavjud ustun kalitlarini qoldiramiz (yetim kalitlar bo'lmasin)
-    return {k: v for k, v in result.items() if k in by_key}
+    # faqat mavjud ustun kalitlari + `__done` qoladi (yetim kalitlar bo'lmasin)
+    return {k: v for k, v in result.items() if k in by_key or k == ROW_DONE_KEY}

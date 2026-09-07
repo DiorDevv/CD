@@ -26,7 +26,7 @@ import { toast } from "sonner";
 import { api, apiError, apiStatus, fieldErrors } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useDirectory } from "@/lib/directory";
-import { defaultCellValue, typeMeta } from "@/lib/dynamic";
+import { defaultCellValue, ROW_DONE_KEY, typeMeta } from "@/lib/dynamic";
 import { writableSectionsFor, SECTION_LABELS } from "@/lib/types";
 import type { DynamicColumn, DynamicRow, DynamicTableDetail, RowPage } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -133,12 +133,6 @@ export function TableGridPage() {
     [table],
   );
 
-  // "strike_done" yoqilgan boolean ustun = qatorning "bajarildi" belgisi:
-  // true bo'lsa qator xiralashadi va matni ustidan chiziladi (ustun sozlamasida yoqiladi).
-  const doneCol = useMemo(
-    () => sortedCols.find((c) => c.type === "boolean" && c.config.strike_done) ?? null,
-    [sortedCols],
-  );
 
   const seedNewRow = useCallback((cols: DynamicColumn[]) => {
     const seed: Record<string, unknown> = {};
@@ -245,6 +239,31 @@ export function TableGridPage() {
       }
     } finally {
       setSavingCell(null);
+    }
+  }
+
+  // Qator "bajarildi" belgisi (# katagidan) — ustunga bog'liq emas, data.__done
+  async function toggleRowDone(row: DynamicRow) {
+    const next = !row.data[ROW_DONE_KEY];
+    setRows((rs) =>
+      rs.map((r) =>
+        r.id === row.id ? { ...r, data: { ...r.data, [ROW_DONE_KEY]: next } } : r,
+      ),
+    );
+    try {
+      const { data } = await api.patch<DynamicRow>(`/tables/${tableId}/rows/${row.id}`, {
+        data: { [ROW_DONE_KEY]: next },
+        expected_updated_at: row.updated_at,
+      });
+      setRows((rs) => rs.map((r) => (r.id === row.id ? data : r)));
+    } catch (e) {
+      setRows((rs) => rs.map((r) => (r.id === row.id ? row : r))); // qaytaramiz
+      if (apiStatus(e) === 409) {
+        toast.error("Bu qatorni boshqa birov o'zgartirdi — yangilanmoqda");
+        await loadRows();
+      } else {
+        toast.error(apiError(e, "Belgilab bo'lmadi"));
+      }
     }
   }
 
@@ -781,17 +800,44 @@ export function TableGridPage() {
 
             {!showSkeleton &&
               rows.map((row, rIdx) => {
-                const rowDone = doneCol ? !!row.data[doneCol.key] : false;
+                const rowDone = !!row.data[ROW_DONE_KEY];
                 return (
                 <tr
                   key={row.id}
                   className={cn(
                     "group hover:bg-surface-overlay/40",
-                    rowDone && "opacity-60",
+                    rowDone && "opacity-55",
                   )}
                 >
-                  <td className="border-b border-line px-2 py-0 text-center text-2xs tabular-nums text-content-faint">
-                    {offset + rIdx + 1}
+                  <td className="border-b border-line p-0 text-center">
+                    {canWrite ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleRowDone(row)}
+                        title={rowDone ? "Bajarilgan — bekor qilish" : "Bajarildi deb belgilash"}
+                        aria-pressed={rowDone}
+                        className="group/done relative flex min-h-[36px] w-full items-center justify-center text-2xs tabular-nums text-content-faint"
+                      >
+                        {rowDone ? (
+                          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-success/20 text-success">
+                            <Check className="h-3 w-3" />
+                          </span>
+                        ) : (
+                          <>
+                            <span className="transition-opacity group-hover/done:opacity-0">
+                              {offset + rIdx + 1}
+                            </span>
+                            <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover/done:opacity-100">
+                              <span className="h-4 w-4 rounded-full border border-content-faint" />
+                            </span>
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <span className="flex min-h-[36px] items-center justify-center text-2xs tabular-nums text-content-faint">
+                        {rowDone ? <Check className="h-3 w-3 text-success" /> : offset + rIdx + 1}
+                      </span>
+                    )}
                   </td>
                   {sortedCols.map((col, cIdx) => {
                     const isEditing =

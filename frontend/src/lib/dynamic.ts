@@ -34,6 +34,10 @@ export const COLUMN_TYPES: ColumnTypeMeta[] = [
 
 const TYPE_META = new Map(COLUMN_TYPES.map((t) => [t.value, t]));
 
+/** Ustunga bog'liq bo'lmagan qator holati kaliti ("bajarildi" belgisi).
+ *  `row.data[ROW_DONE_KEY]` true bo'lsa qator bajarilgan hisoblanadi. */
+export const ROW_DONE_KEY = "__done";
+
 export function typeMeta(type: ColumnType): ColumnTypeMeta {
   return TYPE_META.get(type) ?? COLUMN_TYPES[0];
 }
@@ -120,8 +124,6 @@ export interface ColumnDraft {
   options: SelectOption[];
   /** turga qarab: string | boolean | "" */
   default: string | boolean;
-  /** boolean: belgilanganda qatorni "bajarilgan" ko'rinishiga o'tkazsin */
-  strikeDone: boolean;
 }
 
 let _uid = 0;
@@ -136,7 +138,6 @@ export function newColumnDraft(type: ColumnType = "text"): ColumnDraft {
     max: "",
     options: [],
     default: type === "boolean" ? false : "",
-    strikeDone: false,
   };
 }
 
@@ -157,7 +158,6 @@ export function columnToDraft(col: DynamicColumn): ColumnDraft {
         : cfg.default != null
           ? String(cfg.default)
           : "",
-    strikeDone: !!cfg.strike_done,
   };
 }
 
@@ -172,7 +172,6 @@ export function draftToColumnPayload(d: ColumnDraft): {
 
   const config: Record<string, unknown> = {};
   if (d.required) config.required = true;
-  if (d.type === "boolean" && d.strikeDone) config.strike_done = true;
 
   if (HAS_OPTIONS.has(d.type)) {
     if (d.options.length === 0) {
