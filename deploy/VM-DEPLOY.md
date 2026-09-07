@@ -317,5 +317,6 @@ image'ini ham o'z ichiga oladi).
 | login bo'ladi-yu, darhol chiqib ketadi | HTTPS ortida `COOKIE_SECURE=false` qolgan → `true` |
 | `POSTGRES_PASSWORD ... belgilanishi shart` | `.env.prod` da `POSTGRES_PASSWORD` bo'sh |
 | `sdp_web` unhealthy, lekin sayt ochiladi | eski build — `up -d --build` qayta qiling |
+| `sdp_backend` unhealthy; logда `password authentication failed for user "soc"` | DB volume boshqa parol bilan yaratilgan (parol o'zgargan/`.env.prod` qayta yaratilgan). Tuzatish (ma'lumot saqlanadi): **`./deploy/vm-fix-db-auth.sh`** |
 | Caddy sertifikat ololmaydi | 80/443 tashqaridan yopiq yoki DNS noto'g'ri; VM internetdan ko'rinmaydi (ACME) |
 | `!reset` xato beradi (eski compose) | Docker Compose ≥ v2.24 kerak — `docker compose version` bilan tekshiring |
