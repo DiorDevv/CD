@@ -20,6 +20,7 @@ import {
   Settings2,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, apiError, apiStatus, fieldErrors } from "@/lib/api";
@@ -130,6 +131,13 @@ export function TableGridPage() {
   const sortedCols = useMemo(
     () => (table ? [...table.columns].sort((a, b) => a.position - b.position) : []),
     [table],
+  );
+
+  // "strike_done" yoqilgan boolean ustun = qatorning "bajarildi" belgisi:
+  // true bo'lsa qator xiralashadi va matni ustidan chiziladi (ustun sozlamasida yoqiladi).
+  const doneCol = useMemo(
+    () => sortedCols.find((c) => c.type === "boolean" && c.config.strike_done) ?? null,
+    [sortedCols],
   );
 
   const seedNewRow = useCallback((cols: DynamicColumn[]) => {
@@ -772,8 +780,16 @@ export function TableGridPage() {
             )}
 
             {!showSkeleton &&
-              rows.map((row, rIdx) => (
-                <tr key={row.id} className="group hover:bg-surface-overlay/40">
+              rows.map((row, rIdx) => {
+                const rowDone = doneCol ? !!row.data[doneCol.key] : false;
+                return (
+                <tr
+                  key={row.id}
+                  className={cn(
+                    "group hover:bg-surface-overlay/40",
+                    rowDone && "opacity-60",
+                  )}
+                >
                   <td className="border-b border-line px-2 py-0 text-center text-2xs tabular-nums text-content-faint">
                     {offset + rIdx + 1}
                   </td>
@@ -791,6 +807,9 @@ export function TableGridPage() {
                       <td
                         key={col.id}
                         onClick={() => {
+                          // Tahrirlanayotgan katak ichidagi bosish fokusni o'g'irlamasin
+                          // (aks holda kursor doim boshga qaytadi)
+                          if (isEditing) return;
                           setActive({ r: rIdx, c: cIdx });
                           gridRef.current?.focus({ preventScroll: true });
                         }}
@@ -815,13 +834,26 @@ export function TableGridPage() {
                           </div>
                         ) : col.type === "boolean" ? (
                           <div className="flex min-h-[36px] items-center px-3 py-1.5">
-                            <input
-                              type="checkbox"
+                            <button
+                              type="button"
                               disabled={!canWrite || saving}
-                              checked={!!row.data[col.key]}
-                              onChange={(e) => commitCell(row, col, e.target.checked)}
-                              className="h-4 w-4 rounded border-line-strong accent-[hsl(var(--accent))] disabled:opacity-50"
-                            />
+                              onClick={() => commitCell(row, col, !row.data[col.key])}
+                              aria-pressed={!!row.data[col.key]}
+                              title={row.data[col.key] ? "Bajarilgan" : "Bajarilmagan"}
+                              className={cn(
+                                "inline-flex h-5 w-5 items-center justify-center rounded border transition-colors",
+                                row.data[col.key]
+                                  ? "border-success bg-success/20 text-success"
+                                  : "border-danger/40 bg-danger/10 text-danger",
+                                (!canWrite || saving) && "opacity-50",
+                              )}
+                            >
+                              {row.data[col.key] ? (
+                                <Check className="h-3.5 w-3.5" />
+                              ) : (
+                                <X className="h-3.5 w-3.5" />
+                              )}
+                            </button>
                           </div>
                         ) : (
                           <button
@@ -834,6 +866,7 @@ export function TableGridPage() {
                               "flex min-h-[36px] w-full items-start px-3 py-1.5 text-left",
                               canWrite && "hover:bg-surface-overlay/60",
                               saving && "opacity-50",
+                              rowDone && "text-content-faint line-through",
                             )}
                           >
                             <CellDisplay
@@ -886,7 +919,8 @@ export function TableGridPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
 
             {/* Inline yangi qator */}
             {!showSkeleton && showInlineAdd && (

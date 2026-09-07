@@ -80,6 +80,8 @@ export interface ColumnConfig {
   max?: number;
   /** Ustunning ko'rsatiladigan kengligi (px), 80–800 */
   width?: number;
+  /** boolean: belgilanganda qator "bajarilgan" ko'rinishiga o'tadi (xira + ustidan chiziq) */
+  strike_done?: boolean;
 }
 
 export interface DynamicColumn {

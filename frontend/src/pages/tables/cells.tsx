@@ -197,10 +197,10 @@ export function CellDisplay({
           "inline-flex h-4 w-4 items-center justify-center rounded border",
           value
             ? "border-success bg-success/20 text-success"
-            : "border-line-strong text-transparent",
+            : "border-danger/40 bg-danger/10 text-danger",
         )}
       >
-        {value ? <Check className="h-3 w-3" /> : null}
+        {value ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
       </span>
     );
   }
@@ -422,9 +422,18 @@ function InlineInput({
   const [v, setV] = useState(value == null ? "" : String(value));
   const done = useRef(false);
   const ref = useRef<HTMLInputElement>(null);
-  // autoFocus o'rniga — sahifa pastga/tepaga sakramasin
+  // autoFocus o'rniga: sahifa sakramasin + kursor matn OXIRIDA tursin
+  // (shu bilan darrov yangi so'z qo'shsa bo'ladi; ichiga bossa kursor o'sha joyga)
   useEffect(() => {
-    ref.current?.focus({ preventScroll: true });
+    const el = ref.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    try {
+      const end = el.value.length;
+      el.setSelectionRange(end, end);
+    } catch {
+      /* type=number/date setSelectionRange'ni qo'llamaydi */
+    }
   }, []);
   const finish = (mode: "enter" | "blur") => {
     if (done.current) return;

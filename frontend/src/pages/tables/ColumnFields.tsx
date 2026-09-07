@@ -229,6 +229,18 @@ export function ColumnFields({ draft, onChange, originalType, compact }: Props) 
           Majburiy maydon
         </label>
       </div>
+
+      {draft.type === "boolean" && (
+        <label className="flex items-center gap-2 text-sm text-content-muted">
+          <input
+            type="checkbox"
+            checked={draft.strikeDone}
+            onChange={(e) => onChange({ strikeDone: e.target.checked })}
+            className="h-3.5 w-3.5 rounded border-line-strong accent-[hsl(var(--accent))]"
+          />
+          Belgilanganda qatorni "bajarilgan" ko'rsatsin (xira + ustidan chiziq)
+        </label>
+      )}
     </div>
   );
 }

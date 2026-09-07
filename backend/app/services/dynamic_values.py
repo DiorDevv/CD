@@ -51,6 +51,10 @@ def normalize_column_config(col_type: ColumnType, config: object) -> dict[str, A
             raise ValueError("width butun son bo'lishi kerak")
         out["width"] = max(80, min(800, w))
 
+    # boolean: belgilanganda qator "bajarilgan" ko'rinishiga o'tsin (xira + chiziq)
+    if col_type is ColumnType.boolean and cfg.get("strike_done") is not None:
+        out["strike_done"] = bool(cfg["strike_done"])
+
     if col_type in _NEEDS_OPTIONS:
         raw_opts = cfg.get("options")
         if not isinstance(raw_opts, list) or not raw_opts:
