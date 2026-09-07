@@ -12,7 +12,10 @@ from app.api import admin, auth, export, sections, tables, users
 from app.config import settings
 from app.database import AsyncSessionLocal
 from app.services.auth_service import cleanup_expired_tokens, purge_old_audit_logs
-from app.services.export_job_service import cleanup_old as cleanup_old_exports
+from app.services.export_job_service import (
+    cleanup_old as cleanup_old_exports,
+    reconcile_orphans as reconcile_orphan_exports,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("app")
@@ -70,6 +73,16 @@ async def _retention_loop() -> None:
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     with contextlib.suppress(OSError):
         os.makedirs(settings.EXPORT_DIR, exist_ok=True)
+
+    # Restart'dan keyin osilib qolgan eksport job'larini tiklaymiz
+    try:
+        async with AsyncSessionLocal() as db:
+            n = await reconcile_orphan_exports(db)
+        if n:
+            logger.info("start: %s osilib qolgan eksport job qayta ko'rib chiqildi", n)
+    except Exception:  # pragma: no cover - start hech qachon bloklanmasin
+        logger.exception("eksport reconcile startda xato")
+
     task = asyncio.create_task(_retention_loop())
     try:
         yield

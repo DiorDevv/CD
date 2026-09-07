@@ -7,6 +7,7 @@ natijani `settings.EXPORT_DIR` ga fayl qilib yozadi, SHA-256 hisoblaydi.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import logging
 import os
@@ -167,6 +168,19 @@ async def run_job(job_id: str) -> None:
             job.status = ExportJobStatus.cancelled
             job.completed_at = _now()
             await db.commit()
+        except asyncio.CancelledError:
+            # request_cancel() -> task.cancel(), yoki event loop to'xtayapti.
+            if job_id in _cancel_requested:
+                _cancel_requested.discard(job_id)
+                with contextlib.suppress(Exception):
+                    job.status = ExportJobStatus.cancelled
+                    job.completed_at = _now()
+                    await db.commit()
+                # foydalanuvchi bekor qildi — holat toza, CancelledError'ni yutamiz
+            else:
+                # haqiqiy shutdown: holatni tark etamiz, keyingi startda
+                # reconcile_orphans() 'running' job'ni qayta navbatga qo'yadi
+                raise
         except Exception as exc:  # noqa: BLE001 - job hech qachon crash qilmasin
             logger.exception("export job %s failed", job.id)
             job.status = ExportJobStatus.failed
@@ -177,6 +191,46 @@ async def run_job(job_id: str) -> None:
 
 class _Cancelled(Exception):
     pass
+
+
+async def reconcile_orphans(db: AsyncSession) -> int:
+    """Backend qayta ishga tushganda 'pending'/'running' da osilib qolgan
+    job'lar (fon task'i process bilan birga yo'qolgan). Eng eskisidan
+    boshlab EXPORT_JOB_MAX_CONCURRENT tasini qayta navbatga qo'yamiz,
+    qolganini 'failed' qilamiz (foydalanuvchi qayta boshlashi mumkin).
+    App startida bir marta chaqiriladi."""
+    orphans = list(
+        (
+            await db.execute(
+                select(ExportJob)
+                .where(ExportJob.status.in_(_ACTIVE))
+                .order_by(ExportJob.created_at.asc())
+            )
+        ).scalars().all()
+    )
+    if not orphans:
+        return 0
+
+    cap = max(1, settings.EXPORT_JOB_MAX_CONCURRENT)
+    to_resume = orphans[:cap]
+    for job in to_resume:
+        job.status = ExportJobStatus.pending
+        job.error_message = None
+        job.completed_at = None
+    for job in orphans[cap:]:
+        job.status = ExportJobStatus.failed
+        job.error_message = "Backend qayta ishga tushdi — eksportni qayta boshlang"
+        job.completed_at = _now()
+    await db.commit()
+
+    for job in to_resume:
+        start(job.id)
+    logger.info(
+        "export reconcile: %s qayta navbatga, %s failed",
+        len(to_resume),
+        len(orphans) - len(to_resume),
+    )
+    return len(orphans)
 
 
 async def list_for_table(db: AsyncSession, table_id: uuid.UUID, *, limit: int = 30) -> list[ExportJob]:

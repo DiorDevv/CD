@@ -191,3 +191,52 @@ async def test_export_audit(client, actors):
     await client.get(f"/api/tables/{tid}/export", headers=_h(root), params={"format": "csv"})
     logs = await client.get("/api/admin/audit-logs", headers=_h(root))
     assert "export_created" in {x["action"] for x in logs.json()["items"]}
+
+
+async def test_reconcile_orphans_after_restart(client, actors, monkeypatch):
+    """Backend restart'ini taqlid qilamiz: 'running' da qolgan job'lar —
+    cap ichidagilari qayta navbatga, ortiqchasi 'failed'."""
+    from app.config import settings as _settings
+    from app.models.export_job import ExportJob, ExportJobStatus
+
+    monkeypatch.setattr(_settings, "EXPORT_JOB_MAX_CONCURRENT", 1)
+    root = await _tok(client, "root_admin")
+    tid, _ = await _table_with_rows(client, root, n=2)
+
+    # ikkita job yaratamiz (autouse fixture start()'ni no-op qilgan)
+    j1 = (await client.post(f"/api/tables/{tid}/export/jobs", headers=_h(root))).json()["id"]
+    # 429 bo'lmasligi uchun 1-jobни vaqtincha "running" dan chiqaramiz emas —
+    # buning o'rniga ikkinchisini to'g'ridan-to'g'ri DB'ga qo'shamiz
+    async with TestSession() as db:
+        first = await db.get(ExportJob, __import__("uuid").UUID(j1))
+        j2 = ExportJob(
+            table_id=first.table_id,
+            section=first.section,
+            status=ExportJobStatus.running,
+            format=first.format,
+            filters={"q": None, "sort": None},
+            created_by=first.created_by,
+        )
+        db.add(j2)
+        first.status = ExportJobStatus.running
+        await db.commit()
+        j2_id = str(j2.id)
+
+    async with TestSession() as db:
+        n = await export_job_service.reconcile_orphans(db)
+    assert n == 2
+
+    async with TestSession() as db:
+        a = await db.get(ExportJob, __import__("uuid").UUID(j1))
+        b = await db.get(ExportJob, __import__("uuid").UUID(j2_id))
+        by_created = sorted([a, b], key=lambda x: x.created_at)
+        assert by_created[0].status is ExportJobStatus.pending
+        assert by_created[0].error_message is None
+        assert by_created[1].status is ExportJobStatus.failed
+        assert "qayta" in (by_created[1].error_message or "").lower()
+
+    # tiklangan job haqiqatan tugay oladi
+    resumed_id = str(by_created[0].id)
+    await export_job_service.run_job(resumed_id)
+    done = (await client.get(f"/api/exports/{resumed_id}", headers=_h(root))).json()
+    assert done["status"] == "done"
