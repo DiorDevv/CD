@@ -72,8 +72,11 @@ services:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
       interval: 10s
       timeout: 5s
-      retries: 12
-      start_period: 25s
+      retries: 20
+      # Sekin/yuklangan serverda migratsiya + seed uzoq davom etishi mumkin —
+      # shu vaqt ichida muvaffaqiyatsiz tekshiruvlar "unhealthy" qilib
+      # deploy'ni to'xtatmaydi.
+      start_period: 120s
 
   web:
     build:
