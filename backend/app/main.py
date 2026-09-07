@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.api import admin, auth, export, sections, tables, users
+from app.api import admin, auth, export, section_panel, sections, tables, users
 from app.config import settings
 from app.database import AsyncSessionLocal
 from app.services.auth_service import cleanup_expired_tokens, purge_old_audit_logs
@@ -116,6 +116,7 @@ app.include_router(tables.router, prefix=api)
 app.include_router(export.router, prefix=api)
 app.include_router(sections.soc_router, prefix=api)
 app.include_router(sections.dlp_router, prefix=api)
+app.include_router(section_panel.router, prefix=api)
 
 
 @app.get("/health", tags=["meta"])

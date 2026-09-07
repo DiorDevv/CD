@@ -9,6 +9,7 @@ from app.models.dynamic import (
 )
 from app.models.export_job import ExportFormat, ExportJob, ExportJobStatus
 from app.models.refresh_token import RefreshToken
+from app.models.section_todo import SectionTodo, TodoScope
 from app.models.user import User, UserRole
 
 __all__ = [
@@ -25,4 +26,6 @@ __all__ = [
     "ExportJob",
     "ExportJobStatus",
     "ExportFormat",
+    "SectionTodo",
+    "TodoScope",
 ]

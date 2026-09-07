@@ -150,6 +150,65 @@ export interface RowPage {
   done: number;
 }
 
+// --- Bo'lim paneli (SOC/DLP) ------------------------------------------------
+
+export type TodoScope = "personal" | "shared";
+
+export interface SectionTodo {
+  id: string;
+  section: string;
+  scope: TodoScope;
+  owner_id: string;
+  owner_name: string | null;
+  text: string;
+  is_done: boolean;
+  due_date: string | null;
+  position: number;
+  created_at: string;
+  done_at: string | null;
+}
+
+export interface SectionTotals {
+  tables: number;
+  rows: number;
+  done: number;
+  open: number;
+  added_7d: number;
+}
+
+export interface SectionTableStat {
+  id: string;
+  name: string;
+  row_count: number;
+  done_count: number;
+  updated_at: string;
+  breakdown_label: string | null;
+  breakdown: ColumnValueCount[];
+}
+
+export interface RecentChange {
+  table_id: string;
+  table_name: string;
+  row_id: string;
+  action: string;
+  changed_by: string | null;
+  changed_by_name: string | null;
+  changed_at: string;
+}
+
+export interface TrendPoint {
+  day: string;
+  count: number;
+}
+
+export interface SectionSummary {
+  section: string;
+  totals: SectionTotals;
+  tables: SectionTableStat[];
+  recent: RecentChange[];
+  trend: TrendPoint[];
+}
+
 export interface RowRevision {
   id: string;
   row_id: string;

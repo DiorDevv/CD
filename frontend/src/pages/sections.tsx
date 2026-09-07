@@ -1,39 +1,66 @@
-import { ShieldAlert, DatabaseZap, Eye } from "lucide-react";
-import { PlaceholderDashboard } from "@/pages/PlaceholderDashboard";
+import { useState } from "react";
+import { ShieldAlert, DatabaseZap } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { SectionPanel } from "@/pages/SectionPanel";
 
 export function SocDashboardPage() {
   return (
-    <PlaceholderDashboard
+    <SectionPanel
+      section="soc"
       title="SOC boshqaruv paneli"
-      description="Security Operations Center — hodisalar, ogohlantirishlar va monitoring."
-      section="SOC"
+      description="Security Operations Center — topshiriqlar va bo'lim monitoringi."
       icon={ShieldAlert}
-      panels={["Faol ogohlantirishlar", "Hodisalar navbati", "Sensor holati"]}
     />
   );
 }
 
 export function DlpDashboardPage() {
   return (
-    <PlaceholderDashboard
+    <SectionPanel
+      section="dlp"
       title="DLP boshqaruv paneli"
-      description="Data Loss Prevention — siyosatlar, buzilishlar va kanallar nazorati."
-      section="DLP"
+      description="Data Loss Prevention — topshiriqlar va bo'lim monitoringi."
       icon={DatabaseZap}
-      panels={["Siyosat buzilishlari", "Kanal nazorati", "Karantindagi fayllar"]}
     />
   );
 }
 
 export function ViewerDashboardPage() {
+  const [section, setSection] = useState<"soc" | "dlp">("soc");
   return (
-    <PlaceholderDashboard
-      title="Umumiy monitoring ko'rinishi"
-      description="SOC va DLP bo'limlari bo'yicha yig'ma ma'lumot — faqat kuzatish uchun."
-      section="SOC + DLP"
-      icon={Eye}
-      readOnly
-      panels={["SOC xulosa", "DLP xulosa", "Tizim salomatligi"]}
-    />
+    <div>
+      <div className="mb-3 flex items-center gap-1 rounded-md border border-line-strong p-0.5 w-fit">
+        {(["soc", "dlp"] as const).map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setSection(s)}
+            className={cn(
+              "rounded px-3 py-1 text-xs font-medium transition-colors",
+              section === s
+                ? "bg-accent-soft text-content"
+                : "text-content-muted hover:text-content",
+            )}
+          >
+            {s.toUpperCase()}
+          </button>
+        ))}
+      </div>
+      {section === "soc" ? (
+        <SectionPanel
+          section="soc"
+          title="SOC — kuzatuv ko'rinishi"
+          description="Faqat o'qish. Shaxsiy topshiriqlaringizni yozib qo'yishingiz mumkin."
+          icon={ShieldAlert}
+        />
+      ) : (
+        <SectionPanel
+          section="dlp"
+          title="DLP — kuzatuv ko'rinishi"
+          description="Faqat o'qish. Shaxsiy topshiriqlaringizni yozib qo'yishingiz mumkin."
+          icon={DatabaseZap}
+        />
+      )}
+    </div>
   );
 }
