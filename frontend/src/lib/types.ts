@@ -78,6 +78,8 @@ export interface ColumnConfig {
   options?: SelectOption[];
   min?: number;
   max?: number;
+  /** Ustunning ko'rsatiladigan kengligi (px), 80–800 */
+  width?: number;
 }
 
 export interface DynamicColumn {

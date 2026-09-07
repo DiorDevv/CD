@@ -106,6 +106,19 @@ export function TableGridPage() {
   const dragCol = useRef<number | null>(null);
   const [dragOverCol, setDragOverCol] = useState<number | null>(null);
 
+  // Ustun kengligini sudrab o'zgartirish (config.width — serverda saqlanadi)
+  const ROWNUM_COL_W = 44;
+  const ACTIONS_COL_W = 104;
+  const defaultColW = (t: DynamicColumn["type"]) =>
+    t === "boolean" ? 90 : t === "number" || t === "date" ? 130 : t === "datetime" ? 170 : 200;
+  const [draftW, setDraftW] = useState<Record<string, number>>({});
+  const resizing = useRef<{ col: DynamicColumn; startX: number; w: number } | null>(null);
+
+  const colWidth = useCallback(
+    (col: DynamicColumn) => draftW[col.id] ?? col.config.width ?? defaultColW(col.type),
+    [draftW],
+  );
+
   const canWrite =
     !!table &&
     !!user &&
@@ -198,7 +211,7 @@ export function TableGridPage() {
       setActive((a) =>
         a ? { r: Math.min(rows.length - 1, a.r + 1), c: a.c } : a,
       );
-      gridRef.current?.focus();
+      gridRef.current?.focus({ preventScroll: true });
     }
     const cur = row.data[col.key] ?? null;
     if (JSON.stringify(cur) === JSON.stringify(value ?? null)) return;
@@ -313,6 +326,50 @@ export function TableGridPage() {
     } catch (e) {
       toast.error(apiError(e));
     }
+  }
+
+  async function persistColWidth(col: DynamicColumn, width: number) {
+    try {
+      await api.patch(`/tables/${tableId}/columns/${col.id}`, {
+        config: { ...col.config, width },
+      });
+      await loadTable();
+    } catch (e) {
+      toast.error(apiError(e, "Ustun kengligini saqlab bo'lmadi"));
+    } finally {
+      setDraftW((d) => {
+        const next = { ...d };
+        delete next[col.id];
+        return next;
+      });
+    }
+  }
+
+  function startResize(e: React.MouseEvent, col: DynamicColumn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const th = (e.currentTarget as HTMLElement).closest("th");
+    const startW = th ? Math.round(th.getBoundingClientRect().width) : colWidth(col);
+    resizing.current = { col, startX: e.clientX, w: startW };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    const onMove = (ev: MouseEvent) => {
+      const st = resizing.current;
+      if (!st) return;
+      st.w = Math.max(80, Math.min(800, startW + (ev.clientX - st.startX)));
+      setDraftW((d) => ({ ...d, [st.col.id]: st.w }));
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      const st = resizing.current;
+      resizing.current = null;
+      if (st && st.w !== startW) void persistColWidth(st.col, st.w);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   }
 
   async function deleteColumn(col: DynamicColumn) {
@@ -576,10 +633,25 @@ export function TableGridPage() {
         onKeyDown={onGridKeyDown}
         className="overflow-x-auto rounded-lg border border-line outline-none focus-visible:ring-1 focus-visible:ring-accent/40"
       >
-        <table className="w-full min-w-max border-collapse text-sm">
+        <table
+          className="min-w-full table-fixed border-collapse text-sm"
+          style={{
+            width:
+              ROWNUM_COL_W +
+              ACTIONS_COL_W +
+              sortedCols.reduce((s, c) => s + colWidth(c), 0),
+          }}
+        >
+          <colgroup>
+            <col style={{ width: ROWNUM_COL_W }} />
+            {sortedCols.map((col) => (
+              <col key={col.id} style={{ width: colWidth(col) }} />
+            ))}
+            <col style={{ width: ACTIONS_COL_W }} />
+          </colgroup>
           <thead className="bg-surface-raised">
             <tr>
-              <th className="w-10 border-b border-line px-2 py-2 text-2xs font-medium text-content-faint">
+              <th className="border-b border-line px-2 py-2 text-2xs font-medium text-content-faint">
                 #
               </th>
               {sortedCols.map((col, i) => {
@@ -592,7 +664,7 @@ export function TableGridPage() {
                     onDragEnter={() => canWrite && setDragOverCol(i)}
                     onDragOver={(e) => canWrite && e.preventDefault()}
                     className={cn(
-                      "group min-w-[160px] max-w-[360px] border-b border-l border-line px-3 py-2 text-left align-middle font-medium",
+                      "group relative border-b border-l border-line px-3 py-2 text-left align-middle font-medium",
                       dragOverCol === i && "bg-accent-soft",
                     )}
                   >
@@ -654,10 +726,21 @@ export function TableGridPage() {
                         </Dropdown>
                       )}
                     </div>
+                    {canWrite && (
+                      <span
+                        onMouseDown={(e) => startResize(e, col)}
+                        onClick={(e) => e.stopPropagation()}
+                        onDragStart={(e) => e.preventDefault()}
+                        role="separator"
+                        aria-orientation="vertical"
+                        title="Kenglikni sudrab o'zgartiring"
+                        className="absolute -right-1 top-0 z-10 h-full w-2 cursor-col-resize touch-none select-none hover:bg-accent/40"
+                      />
+                    )}
                   </th>
                 );
               })}
-              <th className="w-24 border-b border-l border-line px-2 py-2" />
+              <th className="border-b border-l border-line px-2 py-2" />
             </tr>
           </thead>
           <tbody>
@@ -709,7 +792,7 @@ export function TableGridPage() {
                         key={col.id}
                         onClick={() => {
                           setActive({ r: rIdx, c: cIdx });
-                          gridRef.current?.focus();
+                          gridRef.current?.focus({ preventScroll: true });
                         }}
                         className={cn(
                           "relative border-b border-l border-line p-0 align-top",
@@ -726,7 +809,7 @@ export function TableGridPage() {
                               onCommit={(v, mode) => commitCell(row, col, v, mode)}
                               onCancel={() => {
                                 setEditing(null);
-                                gridRef.current?.focus();
+                                gridRef.current?.focus({ preventScroll: true });
                               }}
                             />
                           </div>

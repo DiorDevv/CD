@@ -42,6 +42,14 @@ def normalize_column_config(col_type: ColumnType, config: object) -> dict[str, A
     if cfg.get("required") is not None:
         out["required"] = bool(cfg["required"])
 
+    # Ustunning ko'rsatiladigan kengligi (px) — turdan qat'i nazar
+    if cfg.get("width") is not None:
+        try:
+            w = int(cfg["width"])
+        except (TypeError, ValueError):
+            raise ValueError("width butun son bo'lishi kerak")
+        out["width"] = max(80, min(800, w))
+
     if col_type in _NEEDS_OPTIONS:
         raw_opts = cfg.get("options")
         if not isinstance(raw_opts, list) or not raw_opts:

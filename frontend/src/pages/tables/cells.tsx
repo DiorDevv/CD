@@ -307,6 +307,19 @@ function FloatingBox({
 
   useLayoutEffect(() => {
     reposition();
+    // Shrift/kontent kech joylashsa keyingi kadrda yana o'lchaymiz
+    const raf = requestAnimationFrame(reposition);
+    return () => cancelAnimationFrame(raf);
+  }, [reposition]);
+
+  // Qutining o'z o'lchami o'zgarsa (masalan textarea'ni cho'zish,
+  // ro'yxat variantlari kech kelishi) qayta joylash
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => reposition());
+    ro.observe(box);
+    return () => ro.disconnect();
   }, [reposition]);
 
   useEffect(() => {
@@ -408,6 +421,11 @@ function InlineInput({
 }: EditorProps & { inputType: string }) {
   const [v, setV] = useState(value == null ? "" : String(value));
   const done = useRef(false);
+  const ref = useRef<HTMLInputElement>(null);
+  // autoFocus o'rniga — sahifa pastga/tepaga sakramasin
+  useEffect(() => {
+    ref.current?.focus({ preventScroll: true });
+  }, []);
   const finish = (mode: "enter" | "blur") => {
     if (done.current) return;
     done.current = true;
@@ -415,7 +433,7 @@ function InlineInput({
   };
   return (
     <input
-      autoFocus
+      ref={ref}
       type={inputType}
       value={v}
       min={col.type === "number" ? col.config.min : undefined}
@@ -442,6 +460,10 @@ function DateTimeEditor({ value, onCommit, onCancel }: EditorProps) {
   // ISO(UTC) -> datetime-local (mahalliy) va orqaga
   const [v, setV] = useState(value ? isoToLocalInput(String(value)) : "");
   const done = useRef(false);
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    ref.current?.focus({ preventScroll: true });
+  }, []);
   const finish = (mode: "enter" | "blur") => {
     if (done.current) return;
     done.current = true;
@@ -449,7 +471,7 @@ function DateTimeEditor({ value, onCommit, onCancel }: EditorProps) {
   };
   return (
     <input
-      autoFocus
+      ref={ref}
       type="datetime-local"
       value={v}
       onChange={(e) => setV(e.target.value)}
