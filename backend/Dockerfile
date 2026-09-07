@@ -27,14 +27,7 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY . .
 
-# Root emas: entrypoint root'da ishga tushib volume egaligини tuzatadi
-# (/data — sirlar, /app/exports — eksport fayllari), so'ng `appuser` (uid 10001)
-# ga tushib uvicorn'ni ishga tushiradi. Shu tufayli fresh va mavjud deploy
-# (root egaligidagi eski volume) ham ishlaydi.
-RUN chmod +x /app/entrypoint.sh \
-    && useradd -r -u 10001 -m -d /home/appuser appuser \
-    && mkdir -p /app/exports /data \
-    && chown -R appuser:appuser /app /data
+RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 8000
 # `bash` bilan chaqiramiz — bind-mount host fayl exec bitisiz bo'lsa ham ishlaydi

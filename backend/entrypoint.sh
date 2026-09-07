@@ -1,25 +1,12 @@
 #!/usr/bin/env bash
 set -e
 
-SECRETS_DIR="${SECRETS_DIR:-/data}"
-EXPORT_DIR="${EXPORT_DIR:-/app/exports}"
-
-# ---------------------------------------------------------------------------
-# Root'da ishga tushdikmi — volume egaligini tuzatib (eski deploy'lar root
-# egaligida bo'lishi mumkin), so'ng appuser (uid 10001) ga tushamiz.
-# `gosu` kerak emas — python bilan privilegiyani tushiramiz.
-# ---------------------------------------------------------------------------
-if [ "$(id -u)" = "0" ]; then
-  mkdir -p "$SECRETS_DIR" "$EXPORT_DIR" 2>/dev/null || true
-  chown -R 10001:10001 "$SECRETS_DIR" "$EXPORT_DIR" 2>/dev/null || true
-  exec python -c "import os,sys; os.setgid(10001); os.setuid(10001); os.execv('/bin/bash', ['/bin/bash', sys.argv[1], *sys.argv[2:]])" "$0" "$@"
-fi
-
 # ---------------------------------------------------------------------------
 # Maxfiy qiymatlar berilmagan bo'lsa — bir marta generatsiya qilib, doimiy
 # volume'ga (/data) saqlaymiz. Shu tufayli `.env` faylsiz ham ishlaydi.
 # Aniq berilgan env qiymatlari (docker-compose / .env.prod) ustunlik qiladi.
 # ---------------------------------------------------------------------------
+SECRETS_DIR="${SECRETS_DIR:-/data}"
 mkdir -p "$SECRETS_DIR" 2>/dev/null || true
 
 if [ -z "${JWT_SECRET_KEY:-}" ]; then
