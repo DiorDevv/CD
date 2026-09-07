@@ -35,24 +35,74 @@ import asyncpg
 
 url = os.environ["DATABASE_URL"].replace("postgresql+asyncpg://", "postgresql://")
 
+
+def die_password(err: str) -> None:
+    sys.stderr.write(
+        "\n"
+        "======================================================================\n"
+        "  XATO: PostgreSQL autentifikatsiyasi muvaffaqiyatsiz.\n"
+        "  (" + err + ")\n"
+        "\n"
+        "  Sabab: `db` ma'lumotlar volume'i BOSHQA parol bilan yaratilgan.\n"
+        "  Postgres parolni FAQAT birinchi ishga tushishda (bo'sh volume'da)\n"
+        "  o'rnatadi. Keyin POSTGRES_PASSWORD ni o'zgartirsangiz DB'dagi\n"
+        "  haqiqiy parol o'zgarmaydi, backend esa yangi parol bilan urinadi.\n"
+        "  Ko'pincha sabab: `.env.prod` bilan / usiz oralab ishga tushirish.\n"
+        "\n"
+        "  YECHIM A - ma'lumot saqlanadi (DB parolini hozirgisiga tenglash).\n"
+        "  <PAROL> = .env.prod dagi POSTGRES_PASSWORD (yo'q bo'lsa: sentinel):\n"
+        "    docker compose -f docker-compose.prod.yml --env-file .env.prod \\\n"
+        "      exec db psql -U soc -d postgres \\\n"
+        "      -c \"ALTER USER soc PASSWORD '<PAROL>';\"\n"
+        "    docker compose -f docker-compose.prod.yml --env-file .env.prod up -d\n"
+        "\n"
+        "  YECHIM B - BARCHA DB ma'lumoti o'chadi:\n"
+        "    docker compose -f docker-compose.prod.yml --env-file .env.prod down\n"
+        "    docker volume rm sd-prod_sdp_db_data\n"
+        "    docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build\n"
+        "======================================================================\n"
+    )
+    sys.exit(1)
+
+
 async def wait():
-    for i in range(30):
+    last = None
+    for i in range(60):
         try:
-            conn = await asyncpg.connect(url)
+            conn = await asyncpg.connect(url, timeout=5)
             await conn.close()
             print("==> PostgreSQL tayyor.")
             return
-        except Exception as e:
-            print(f"   ... ({i+1}/30) {e}")
-            await asyncio.sleep(1)
-    print("XATO: PostgreSQL'ga ulanib bo'lmadi.", file=sys.stderr)
+        except asyncpg.PostgresError as e:
+            # Parol / rol xatosi — kutish behuda, darrov tushunarli xabar bilan chiqamiz
+            msg = str(e).lower()
+            if (
+                "password authentication failed" in msg
+                or "no password supplied" in msg
+                or "role" in msg and "does not exist" in msg
+            ):
+                die_password(str(e))
+            # boshqa server xatolari (masalan "starting up") — qayta urinamiz
+            last = e
+            print(f"   ... ({i + 1}/60) {e}")
+            await asyncio.sleep(2)
+        except (OSError, asyncio.TimeoutError) as e:
+            # server hali ko'tarilmagan / port yopiq — qayta urinamiz
+            last = e
+            print(f"   ... ({i + 1}/60) {e}")
+            await asyncio.sleep(2)
+    sys.stderr.write(f"XATO: PostgreSQL'ga ulanib bo'lmadi (oxirgi xato: {last})\n")
     sys.exit(1)
+
 
 asyncio.run(wait())
 PY
 
 echo "==> Alembic migratsiyalar..."
-alembic upgrade head
+if ! alembic upgrade head; then
+  echo "XATO: migratsiya muvaffaqiyatsiz — yuqoridagi xatoga qarang." >&2
+  exit 1
+fi
 
 echo "==> Super admin seed..."
 python -m scripts.seed_superadmin || true
