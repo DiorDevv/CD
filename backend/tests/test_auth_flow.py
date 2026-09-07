@@ -421,3 +421,20 @@ async def test_cannot_reset_own_password_via_admin(client, superadmin):
         f"/api/admin/users/{me['id']}/reset-password", headers=hdr, json={}
     )
     assert r.status_code == 400
+
+
+async def test_auth_rate_limit_per_ip(client, superadmin, monkeypatch):
+    """IP bo'yicha auth rate-limit: oynadan oshsa 429 (test muhitida odatda o'chiq)."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "ENV", "prod")
+    monkeypatch.setattr(settings, "AUTH_RATE_LIMIT", 3)
+    monkeypatch.setattr(settings, "AUTH_RATE_WINDOW_SEC", 60)
+
+    codes = [(await _login(client, "root_admin", "nope")).status_code for _ in range(5)]
+    assert codes[:3] == [401, 401, 401]
+    assert codes[3] == 429 and codes[4] == 429
+
+    blocked = await _login(client, "root_admin", "nope")
+    assert blocked.status_code == 429
+    assert "Retry-After" in blocked.headers

@@ -10,6 +10,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api import admin, auth, export, section_panel, sections, tables, users
 from app.config import settings
+from app.core.ratelimit import AuthRateLimitMiddleware
 from app.database import AsyncSessionLocal
 from app.services.auth_service import cleanup_expired_tokens, purge_old_audit_logs
 from app.services.export_job_service import (
@@ -74,6 +75,20 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     with contextlib.suppress(OSError):
         os.makedirs(settings.EXPORT_DIR, exist_ok=True)
 
+    # Prod'da xavfli konfiguratsiya — baland ovozли ogohlantirish (bloklamaydi)
+    if settings.is_prod:
+        if not settings.COOKIE_SECURE:
+            logger.warning(
+                "XAVFSIZLIK: prod'da COOKIE_SECURE=false — HTTPS ortида ishlating "
+                "va .env.prod'da COOKIE_SECURE=true qiling (aks holda refresh cookie "
+                "ochiq HTTP orqali o'g'irlanishi mumkin)."
+            )
+        if any(o.strip() == "*" for o in settings.CORS_ORIGINS):
+            logger.warning(
+                "XAVFSIZLIK: CORS_ORIGINS ichida '*' — kredentsiallar bilan xavfli. "
+                "Aniq origin(lar)ni ko'rsating."
+            )
+
     # Restart'dan keyin osilib qolgan eksport job'larini tiklaymiz
     try:
         async with AsyncSessionLocal() as db:
@@ -92,14 +107,19 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             await task
 
 
+# Prod'da API hujjatlari (Swagger/Redoc/OpenAPI) yopiladi — hujum yuzasini kamaytirish
+_docs = dict(docs_url=None, redoc_url=None, openapi_url=None) if settings.is_prod else {}
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version="0.1.0",
     description="SOC/DLP Monitoring Platform — Auth & RBAC moduli",
     lifespan=lifespan,
+    **_docs,
 )
 
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(AuthRateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,

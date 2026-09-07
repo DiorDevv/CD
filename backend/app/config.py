@@ -1,8 +1,10 @@
 from functools import lru_cache
 from typing import Annotated, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+_WEAK_SECRETS = {"", "change-me", "changeme", "secret", "changeme123!", "test-secret"}
 
 
 class Settings(BaseSettings):
@@ -39,6 +41,10 @@ class Settings(BaseSettings):
     # --- Login attempt limit ---
     MAX_FAILED_ATTEMPTS: int = 5
     LOCKOUT_MINUTES: int = 15
+
+    # --- Auth endpoint IP rate-limit (login/refresh/change-password) ---
+    AUTH_RATE_LIMIT: int = 20          # bir oynada bitta IP'dan ruxsat etilgan POST soni
+    AUTH_RATE_WINDOW_SEC: int = 60
 
     # --- Parol siyosati ---
     PASSWORD_MIN_LENGTH: int = 10
@@ -80,6 +86,24 @@ class Settings(BaseSettings):
     @property
     def is_prod(self) -> bool:
         return self.ENV == "prod"
+
+    @model_validator(mode="after")
+    def _prod_safety(self) -> "Settings":
+        """Prod'da xavfli konfiguratsiyada ishga tushmaslik (fail-fast)."""
+        if self.ENV != "prod":
+            return self
+        secret = self.JWT_SECRET_KEY.strip()
+        if len(secret) < 32 or secret.lower() in _WEAK_SECRETS:
+            raise ValueError(
+                "prod: JWT_SECRET_KEY zaif yoki juda qisqa — kamida 32 belgilik "
+                "tasodifiy qiymat kerak (masalan `openssl rand -hex 32`)."
+            )
+        if self.SUPERADMIN_PASSWORD.strip().lower() in {"changeme123!", ""}:
+            raise ValueError(
+                "prod: SUPERADMIN_PASSWORD standart qiymatda — .env.prod'da "
+                "kuchli parol belgilang (yoki bo'sh qoldiring, entrypoint generatsiya qiladi)."
+            )
+        return self
 
 
 @lru_cache

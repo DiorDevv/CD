@@ -128,14 +128,14 @@ async def change_password(
         )
     if payload.new_password == payload.current_password:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Yangi parol eskisidan farq qilishi kerak",
         )
     try:
         validate_password_strength(payload.new_password, username=user.username)
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         )
 
     user.hashed_password = hash_password(payload.new_password)

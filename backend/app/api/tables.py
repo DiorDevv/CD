@@ -249,7 +249,7 @@ async def create_table(
         try:
             cfg = normalize_column_config(col.type, col.config)
         except ValueError as exc:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"'{col.label}': {exc}")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"'{col.label}': {exc}")
         db.add(
             DynamicColumn(
                 table_id=table.id,
@@ -369,7 +369,7 @@ async def add_column(
     try:
         cfg = normalize_column_config(payload.type, payload.config)
     except ValueError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc))
 
     pos = payload.position
     if pos is None:
@@ -421,7 +421,7 @@ async def update_column(
             )
         if payload.type in (ColumnType.select, ColumnType.multi_select) and payload.config is None:
             raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
                 "Yangi tur uchun variantlar (config.options) berilishi kerak",
             )
 
@@ -431,7 +431,7 @@ async def update_column(
         try:
             new_cfg = normalize_column_config(target_type, raw_cfg)
         except ValueError as exc:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc))
 
         # Ishlatilayotgan select variantini olib tashlashga yo'l qo'ymaymiz
         if col.type in (ColumnType.select, ColumnType.multi_select) and target_type == col.type:
@@ -711,7 +711,7 @@ async def create_row(
             known_user_ids=known, known_usernames=usernames,
         )
     except RowValidationError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"errors": exc.errors})
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, {"errors": exc.errors})
 
     row = DynamicRow(table_id=table.id, data=data, created_by=user.id, updated_by=user.id)
     db.add(row)
@@ -811,7 +811,7 @@ async def update_row(
             known_user_ids=known, known_usernames=usernames,
         )
     except RowValidationError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"errors": exc.errors})
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, {"errors": exc.errors})
 
     row.data = data
     row.updated_by = user.id
@@ -863,7 +863,7 @@ async def restore_revision(
     if rev is None or rev.row_id != row_id or rev.table_id != table.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Reviziya topilmadi")
     if rev.data is None:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Bu reviziyada saqlangan ma'lumot yo'q")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Bu reviziyada saqlangan ma'lumot yo'q")
 
     known, usernames = await _user_directory(db, table.columns, [rev.data])
     try:
@@ -872,7 +872,7 @@ async def restore_revision(
             known_user_ids=known, known_usernames=usernames,
         )
     except RowValidationError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"errors": exc.errors})
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, {"errors": exc.errors})
 
     row.data = data
     row.updated_by = user.id
