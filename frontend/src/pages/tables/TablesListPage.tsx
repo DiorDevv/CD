@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Archive, Columns3, Database, Plus, Rows3, Search } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  Columns3,
+  Database,
+  MoreVertical,
+  Plus,
+  Rows3,
+  Search,
+  Trash2,
+} from "lucide-react";
+import { toast } from "sonner";
 import { api, apiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -19,6 +30,14 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import {
+  Dropdown,
+  DropdownContent,
+  DropdownItem,
+  DropdownSeparator,
+  DropdownTrigger,
+} from "@/components/ui/dropdown";
 import { NewTableDialog } from "@/pages/tables/NewTableDialog";
 
 type SortKey = "name" | "updated" | "rows";
@@ -41,6 +60,34 @@ export function TablesListPage() {
   const [query, setQuery] = useState("");
   const [sectionFilter, setSectionFilter] = useState<SectionFilter>("all");
   const [sortBy, setSortBy] = useState<SortKey>("name");
+  const [pendingDelete, setPendingDelete] = useState<DynamicTable | null>(null);
+
+  const isSuper = user?.role === "super_admin";
+  const canManage = useCallback(
+    (t: DynamicTable) =>
+      !!user && writableSectionsFor(user.role).includes(t.section),
+    [user],
+  );
+
+  async function toggleArchive(t: DynamicTable) {
+    try {
+      await api.patch(`/tables/${t.id}`, { is_archived: !t.is_archived });
+      toast.success(t.is_archived ? "Arxivdan chiqarildi" : "Arxivga o'tkazildi");
+      await load();
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  }
+
+  async function deleteTable(t: DynamicTable) {
+    try {
+      await api.delete(`/tables/${t.id}`);
+      toast.success(`"${t.name}" o'chirildi`);
+      await load();
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -212,17 +259,62 @@ export function TablesListPage() {
               <span className="text-2xs text-content-faint">{items.length} ta</span>
             </div>
             <div className="grid grid-cols-3 gap-4">
-              {items.map((t, i) => (
+              {items.map((t, i) => {
+                const manageable = canManage(t) || isSuper;
+                return (
                 <motion.div
                   key={t.id}
+                  className="group relative"
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: Math.min(i * 0.03, 0.25), duration: 0.2 }}
                 >
+                  {manageable && (
+                    <div className="absolute right-1.5 top-1.5 z-10">
+                      <Dropdown>
+                        <DropdownTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`${t.name} amallari`}
+                            className="rounded p-1 text-content-faint opacity-0 transition-opacity hover:bg-surface-overlay hover:text-content focus:opacity-100 group-hover:opacity-100"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </button>
+                        </DropdownTrigger>
+                        <DropdownContent align="end">
+                          {canManage(t) && (
+                            <DropdownItem onSelect={() => toggleArchive(t)}>
+                              {t.is_archived ? (
+                                <>
+                                  <ArchiveRestore className="h-3.5 w-3.5" />
+                                  Arxivdan chiqarish
+                                </>
+                              ) : (
+                                <>
+                                  <Archive className="h-3.5 w-3.5" />
+                                  Arxivga o'tkazish
+                                </>
+                              )}
+                            </DropdownItem>
+                          )}
+                          {isSuper && (
+                            <>
+                              {canManage(t) && <DropdownSeparator />}
+                              <DropdownItem destructive onSelect={() => setPendingDelete(t)}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                                O'chirish
+                              </DropdownItem>
+                            </>
+                          )}
+                        </DropdownContent>
+                      </Dropdown>
+                    </div>
+                  )}
                   <Link to={`/tables/${t.id}`}>
                     <Card className="h-full transition-colors hover:border-line-strong hover:bg-surface-raised">
                       <CardContent className="space-y-3">
-                        <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start justify-between gap-2 pr-6">
                           <p className="font-medium text-content">{t.name}</p>
                           {t.is_archived && (
                             <Badge variant="warning">
@@ -267,12 +359,24 @@ export function TablesListPage() {
                     </Card>
                   </Link>
                 </motion.div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}
 
       <NewTableDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(v) => !v && setPendingDelete(null)}
+        title={`"${pendingDelete?.name}" jadvalini butunlay o'chirish`}
+        description="Jadval, barcha ustunlar, qatorlar va tarix butunlay o'chiriladi. Ortga qaytarib bo'lmaydi. (Arxivga o'tkazishni ko'rib chiqing.)"
+        confirmLabel="Butunlay o'chirish"
+        variant="danger"
+        onConfirm={async () => {
+          if (pendingDelete) await deleteTable(pendingDelete);
+        }}
+      />
     </PageTransition>
   );
 }
