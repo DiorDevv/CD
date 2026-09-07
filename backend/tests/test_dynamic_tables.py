@@ -441,6 +441,46 @@ async def test_row_done_flag(client, actors):
     assert bad.status_code == 422
 
 
+async def test_table_stats_and_done_counts(client, actors):
+    root = await _tok(client, "root_admin")
+    t = (await _mk_table(client, root, "soc", "Statistika", columns=[
+        {"label": "Ism", "type": "text"},
+        {"label": "Daraja", "type": "select", "config": {
+            "options": [{"value": "low", "label": "Past"}, {"value": "high", "label": "Yuqori"}]}},
+    ])).json()
+    tid = t["id"]
+    k_name = next(c["key"] for c in t["columns"] if c["label"] == "Ism")
+    k_lvl = next(c["key"] for c in t["columns"] if c["label"] == "Daraja")
+
+    async def add(**data):
+        return (await client.post(f"/api/tables/{tid}/rows", headers=_h(root),
+                                  json={"data": data})).json()
+
+    r1 = await add(**{k_name: "A", k_lvl: "high"})
+    await add(**{k_name: "B", k_lvl: "high"})
+    await add(**{k_name: "C", k_lvl: "low"})
+
+    # bittasini bajarildi deb belgilaymiz
+    await client.patch(f"/api/tables/{tid}/rows/{r1['id']}", headers=_h(root),
+                       json={"data": {"__done": True}, "expected_updated_at": r1["updated_at"]})
+
+    # /rows javobida done
+    rows = (await client.get(f"/api/tables/{tid}/rows", headers=_h(root))).json()
+    assert rows["total"] == 3 and rows["done"] == 1
+
+    # /stats
+    st = (await client.get(f"/api/tables/{tid}/stats", headers=_h(root))).json()
+    assert st["total"] == 3 and st["done"] == 1
+    lvl = {e["value"]: e["count"] for e in st["by_column"][k_lvl]}
+    assert lvl == {"high": 2, "low": 1}
+    assert st["by_column"][k_lvl][0]["label"] == "Yuqori"  # eng ko'pi birinchi
+
+    # ro'yxatda done_count
+    lst = (await client.get("/api/tables", headers=_h(root))).json()
+    mine = next(x for x in lst["items"] if x["id"] == tid)
+    assert mine["done_count"] == 1 and mine["row_count"] == 3
+
+
 async def test_user_directory(client, actors):
     tok = await _tok(client, "watcher")
     r = await client.get("/api/users/directory", headers=_h(tok))

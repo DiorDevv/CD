@@ -4,6 +4,7 @@ import {
   Archive,
   ArchiveRestore,
   ArrowLeft,
+  BarChart3,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -28,8 +29,14 @@ import { useAuth } from "@/context/AuthContext";
 import { useDirectory } from "@/lib/directory";
 import { defaultCellValue, ROW_DONE_KEY, typeMeta } from "@/lib/dynamic";
 import { writableSectionsFor, SECTION_LABELS } from "@/lib/types";
-import type { DynamicColumn, DynamicRow, DynamicTableDetail, RowPage } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import type {
+  DynamicColumn,
+  DynamicRow,
+  DynamicTableDetail,
+  RowPage,
+  TableStats,
+} from "@/lib/types";
+import { cn, relativeTime } from "@/lib/utils";
 import { PageTransition } from "@/components/PageTransition";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,12 +80,17 @@ export function TableGridPage() {
   const [notFound, setNotFound] = useState(false);
   const [rows, setRows] = useState<DynamicRow[]>([]);
   const [total, setTotal] = useState(0);
+  const [doneCount, setDoneCount] = useState(0);
   const [offset, setOffset] = useState(0);
   const [sort, setSort] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [rowsLoading, setRowsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [stats, setStats] = useState<TableStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
 
   const [editing, setEditing] = useState<{ rowId: string; key: string } | null>(null);
   const [active, setActive] = useState<{ r: number; c: number } | null>(null);
@@ -168,6 +180,7 @@ export function TableGridPage() {
       });
       setRows(data.items);
       setTotal(data.total);
+      setDoneCount(data.done);
     } catch (e) {
       setError(apiError(e));
     } finally {
@@ -176,12 +189,27 @@ export function TableGridPage() {
     }
   }, [tableId, offset, sort, debouncedQ]);
 
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true);
+    try {
+      const { data } = await api.get<TableStats>(`/tables/${tableId}/stats`);
+      setStats(data);
+    } catch {
+      /* xulosa — ikkinchi darajali, xatoni jimgina yutamiz */
+    } finally {
+      setStatsLoading(false);
+    }
+  }, [tableId]);
+
   useEffect(() => {
     void loadTable();
   }, [loadTable]);
   useEffect(() => {
     void loadRows();
   }, [loadRows]);
+  useEffect(() => {
+    if (statsOpen) void loadStats();
+  }, [statsOpen, loadStats]);
   useEffect(() => {
     const t = setTimeout(() => {
       setDebouncedQ(q.trim());
@@ -250,14 +278,17 @@ export function TableGridPage() {
         r.id === row.id ? { ...r, data: { ...r.data, [ROW_DONE_KEY]: next } } : r,
       ),
     );
+    setDoneCount((n) => Math.max(0, n + (next ? 1 : -1)));
     try {
       const { data } = await api.patch<DynamicRow>(`/tables/${tableId}/rows/${row.id}`, {
         data: { [ROW_DONE_KEY]: next },
         expected_updated_at: row.updated_at,
       });
       setRows((rs) => rs.map((r) => (r.id === row.id ? data : r)));
+      if (statsOpen) void loadStats();
     } catch (e) {
       setRows((rs) => rs.map((r) => (r.id === row.id ? row : r))); // qaytaramiz
+      setDoneCount((n) => Math.max(0, n - (next ? 1 : -1)));
       if (apiStatus(e) === 409) {
         toast.error("Bu qatorni boshqa birov o'zgartirdi — yangilanmoqda");
         await loadRows();
@@ -653,6 +684,106 @@ export function TableGridPage() {
         </p>
       )}
 
+      {/* Xulosa paneli */}
+      {sortedCols.length > 0 && (
+        <div className="mb-3">
+          <button
+            type="button"
+            onClick={() => setStatsOpen((v) => !v)}
+            className="flex items-center gap-1.5 text-2xs font-medium text-content-muted hover:text-content"
+          >
+            <BarChart3 className="h-3.5 w-3.5" />
+            Xulosa
+            <ChevronDown
+              className={cn("h-3.5 w-3.5 transition-transform", statsOpen && "rotate-180")}
+            />
+          </button>
+          {statsOpen && (
+            <div className="mt-2 rounded-lg border border-line bg-surface-raised/40 p-3">
+              {statsLoading && !stats ? (
+                <div className="flex justify-center py-3">
+                  <Spinner className="h-4 w-4" />
+                </div>
+              ) : stats ? (
+                <div className="space-y-3">
+                  {stats.total > 0 && (
+                    <div>
+                      <div className="mb-1 flex items-center justify-between text-2xs text-content-muted">
+                        <span>Bajarilgan</span>
+                        <span className="tabular-nums">
+                          {stats.done} / {stats.total} (
+                          {Math.round((stats.done / stats.total) * 100)}%)
+                        </span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-surface-overlay">
+                        <div
+                          className="h-full rounded-full bg-success transition-[width]"
+                          style={{ width: `${(stats.done / stats.total) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {Object.entries(stats.by_column).map(([key, entries]) => {
+                    const col = sortedCols.find((c) => c.key === key);
+                    return (
+                      <div key={key}>
+                        <p className="mb-1 text-2xs font-medium text-content-faint">
+                          {col?.label ?? key}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {entries.map((e) => (
+                            <span
+                              key={e.value}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-line-strong px-2 py-0.5 text-2xs"
+                            >
+                              {e.color && (
+                                <span
+                                  className="h-1.5 w-1.5 rounded-full"
+                                  style={{ background: e.color }}
+                                />
+                              )}
+                              <span className="text-content-muted">{e.label}</span>
+                              <span className="font-medium tabular-nums text-content">
+                                {e.count}
+                              </span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {stats.total === 0 && (
+                    <p className="text-2xs text-content-faint">Qatorlar yo'q.</p>
+                  )}
+                  {stats.total > 0 &&
+                    Object.keys(stats.by_column).length === 0 && (
+                      <p className="text-2xs text-content-faint">
+                        Tanlov / mantiqiy ustunlar yo'q — taqsimot ko'rsatilmaydi.
+                      </p>
+                    )}
+
+                  <div className="flex items-center justify-between border-t border-line pt-2 text-2xs text-content-faint">
+                    <span>Oxirgi o'zgarish: {relativeTime(stats.updated_at)}</span>
+                    <button
+                      type="button"
+                      onClick={() => void loadStats()}
+                      disabled={statsLoading}
+                      className="hover:text-content disabled:opacity-50"
+                    >
+                      Yangilash
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-2xs text-content-faint">Xulosani yuklab bo'lmadi.</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Grid */}
       <div
         ref={gridRef}
@@ -1007,10 +1138,25 @@ export function TableGridPage() {
       </div>
 
       {/* Pagination */}
-      <div className="mt-3 flex items-center justify-between text-xs text-content-muted">
-        <span>
-          {from}–{to} / {total}
-          {rowsLoading && !showSkeleton && <span className="ml-2 text-content-faint">yangilanmoqda…</span>}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-content-muted">
+        <span className="flex items-center gap-2.5">
+          <span>
+            {from}–{to} / {total}
+          </span>
+          {doneCount > 0 && total > 0 && (
+            <span className="flex items-center gap-1.5" title="Bajarilgan qatorlar">
+              <span className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-raised">
+                <span
+                  className="block h-full rounded-full bg-success transition-[width]"
+                  style={{ width: `${Math.min(100, Math.round((doneCount / total) * 100))}%` }}
+                />
+              </span>
+              <span className="tabular-nums text-content-faint">
+                {doneCount}/{total} bajarilgan
+              </span>
+            </span>
+          )}
+          {rowsLoading && !showSkeleton && <span className="text-content-faint">yangilanmoqda…</span>}
         </span>
         <div className="flex gap-2">
           <Button

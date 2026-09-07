@@ -104,10 +104,25 @@ export interface DynamicTable {
   updated_at: string;
   column_count: number;
   row_count: number;
+  done_count: number;
 }
 
 export interface DynamicTableDetail extends DynamicTable {
   columns: DynamicColumn[];
+}
+
+export interface ColumnValueCount {
+  value: string;
+  label: string;
+  count: number;
+  color: string | null;
+}
+
+export interface TableStats {
+  total: number;
+  done: number;
+  updated_at: string;
+  by_column: Record<string, ColumnValueCount[]>;
 }
 
 export interface TablePage {
@@ -132,6 +147,7 @@ export interface RowPage {
   total: number;
   limit: number;
   offset: number;
+  done: number;
 }
 
 export interface RowRevision {

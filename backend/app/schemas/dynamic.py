@@ -72,10 +72,26 @@ class TableOut(BaseModel):
     updated_at: datetime
     column_count: int = 0
     row_count: int = 0
+    done_count: int = 0  # `__done` belgilangan qatorlar soni
 
 
 class TableDetailOut(TableOut):
     columns: list[ColumnOut] = Field(default_factory=list)
+
+
+class ColumnValueCount(BaseModel):
+    value: str
+    label: str
+    count: int
+    color: str | None = None
+
+
+class TableStatsOut(BaseModel):
+    total: int
+    done: int
+    updated_at: datetime
+    # select / multi_select / boolean ustunlar bo'yicha taqsimot
+    by_column: dict[str, list[ColumnValueCount]] = Field(default_factory=dict)
 
 
 class TablePage(BaseModel):
@@ -115,6 +131,7 @@ class RowPage(BaseModel):
     total: int
     limit: int
     offset: int
+    done: int = 0  # joriy filtrdagi `__done` belgilangan qatorlar soni
 
 
 class RowBulkCreate(BaseModel):

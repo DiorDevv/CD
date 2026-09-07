@@ -30,6 +30,7 @@ from app.schemas.dynamic import (
     ColumnCreate,
     ColumnOut,
     ColumnUpdate,
+    ColumnValueCount,
     ReorderRequest,
     RowBulkCreate,
     RowBulkResult,
@@ -42,6 +43,7 @@ from app.schemas.dynamic import (
     TableDetailOut,
     TableOut,
     TablePage,
+    TableStatsOut,
     TableUpdate,
 )
 from app.schemas.user import MessageOut
@@ -87,9 +89,13 @@ def _guard_write(user: User, section: str) -> None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Bu bo'lim uchun yozish ruxsati yo'q")
 
 
-async def _counts(db: AsyncSession, table_ids: list[uuid.UUID]) -> tuple[dict, dict]:
+# `data->>'__done' == 'true'` — JSONB'da belgilangan qatorlar sharti
+_DONE_COND = DynamicRow.data["__done"].astext == "true"
+
+
+async def _counts(db: AsyncSession, table_ids: list[uuid.UUID]) -> tuple[dict, dict, dict]:
     if not table_ids:
-        return {}, {}
+        return {}, {}, {}
     col_rows = await db.execute(
         select(DynamicColumn.table_id, func.count())
         .where(DynamicColumn.table_id.in_(table_ids))
@@ -100,10 +106,17 @@ async def _counts(db: AsyncSession, table_ids: list[uuid.UUID]) -> tuple[dict, d
         .where(DynamicRow.table_id.in_(table_ids))
         .group_by(DynamicRow.table_id)
     )
-    return dict(col_rows.all()), dict(row_rows.all())
+    done_rows = await db.execute(
+        select(DynamicRow.table_id, func.count())
+        .where(DynamicRow.table_id.in_(table_ids), _DONE_COND)
+        .group_by(DynamicRow.table_id)
+    )
+    return dict(col_rows.all()), dict(row_rows.all()), dict(done_rows.all())
 
 
-def _table_out(table: DynamicTable, col_count: int, row_count: int) -> TableOut:
+def _table_out(
+    table: DynamicTable, col_count: int, row_count: int, done_count: int = 0
+) -> TableOut:
     return TableOut(
         **{
             "id": table.id,
@@ -118,14 +131,15 @@ def _table_out(table: DynamicTable, col_count: int, row_count: int) -> TableOut:
             "updated_at": table.updated_at,
             "column_count": col_count,
             "row_count": row_count,
+            "done_count": done_count,
         }
     )
 
 
-def _detail_out(table: DynamicTable, row_count: int) -> TableDetailOut:
+def _detail_out(table: DynamicTable, row_count: int, done_count: int = 0) -> TableDetailOut:
     cols = sorted(table.columns, key=lambda c: c.position)
     return TableDetailOut(
-        **_table_out(table, len(cols), row_count).model_dump(),
+        **_table_out(table, len(cols), row_count, done_count).model_dump(),
         columns=[ColumnOut.model_validate(c) for c in cols],
     )
 
@@ -134,6 +148,16 @@ async def _row_count(db: AsyncSession, table_id: uuid.UUID) -> int:
     return (
         await db.execute(
             select(func.count()).select_from(DynamicRow).where(DynamicRow.table_id == table_id)
+        )
+    ).scalar_one()
+
+
+async def _done_count(db: AsyncSession, table_id: uuid.UUID) -> int:
+    return (
+        await db.execute(
+            select(func.count())
+            .select_from(DynamicRow)
+            .where(DynamicRow.table_id == table_id, _DONE_COND)
         )
     ).scalar_one()
 
@@ -187,9 +211,14 @@ async def list_tables(
         )
     ).scalars().all()
 
-    col_counts, row_counts = await _counts(db, [t.id for t in tables])
+    col_counts, row_counts, done_counts = await _counts(db, [t.id for t in tables])
     return TablePage(
-        items=[_table_out(t, col_counts.get(t.id, 0), row_counts.get(t.id, 0)) for t in tables],
+        items=[
+            _table_out(
+                t, col_counts.get(t.id, 0), row_counts.get(t.id, 0), done_counts.get(t.id, 0)
+            )
+            for t in tables
+        ],
         total=total,
         limit=limit,
         offset=offset,
@@ -252,7 +281,7 @@ async def get_table(
 ) -> TableDetailOut:
     table = await _load_table(db, table_id)
     _guard_read(user, table)
-    return _detail_out(table, await _row_count(db, table.id))
+    return _detail_out(table, await _row_count(db, table.id), await _done_count(db, table.id))
 
 
 @router.patch("/{table_id}", response_model=TableDetailOut)
@@ -287,7 +316,7 @@ async def update_table(
     )
     await db.commit()
     table = await _load_table(db, table.id)
-    return _detail_out(table, await _row_count(db, table.id))
+    return _detail_out(table, await _row_count(db, table.id), await _done_count(db, table.id))
 
 
 @router.delete("/{table_id}", response_model=MessageOut)
@@ -543,12 +572,19 @@ async def list_rows(
 
     base = select(DynamicRow).where(DynamicRow.table_id == table.id)
     count_stmt = select(func.count()).select_from(DynamicRow).where(DynamicRow.table_id == table.id)
+    done_stmt = (
+        select(func.count())
+        .select_from(DynamicRow)
+        .where(DynamicRow.table_id == table.id, _DONE_COND)
+    )
     if q:
         needle = f"%{q.strip()}%"
         base = base.where(cast(DynamicRow.data, Text).ilike(needle))
         count_stmt = count_stmt.where(cast(DynamicRow.data, Text).ilike(needle))
+        done_stmt = done_stmt.where(cast(DynamicRow.data, Text).ilike(needle))
 
     total = (await db.execute(count_stmt)).scalar_one()
+    done = (await db.execute(done_stmt)).scalar_one()
     rows = (
         await db.execute(
             base.order_by(*_sort_clause(sort, table.columns)).limit(limit).offset(offset)
@@ -559,6 +595,67 @@ async def list_rows(
         total=total,
         limit=limit,
         offset=offset,
+        done=done,
+    )
+
+
+# Bundan katta jadvallarda taqsimot hisoblanmaydi (og'ir bo'lmasin)
+_STATS_BREAKDOWN_CAP = 20_000
+
+
+@router.get("/{table_id}/stats", response_model=TableStatsOut)
+async def table_stats(
+    table_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_active_user),
+) -> TableStatsOut:
+    table = await _load_table(db, table_id)
+    _guard_read(user, table)
+
+    total = await _row_count(db, table.id)
+    done = await _done_count(db, table.id)
+
+    by_column: dict[str, list[ColumnValueCount]] = {}
+    cols = [
+        c
+        for c in sorted(table.columns, key=lambda c: c.position)
+        if c.type in (ColumnType.select, ColumnType.multi_select, ColumnType.boolean)
+    ]
+    if cols and 0 < total <= _STATS_BREAKDOWN_CAP:
+        datas = (
+            await db.execute(select(DynamicRow.data).where(DynamicRow.table_id == table.id))
+        ).scalars().all()
+        for col in cols:
+            counter: dict[str, int] = {}
+            for data in datas:
+                v = (data or {}).get(col.key)
+                if col.type is ColumnType.multi_select:
+                    for item in v if isinstance(v, list) else []:
+                        counter[str(item)] = counter.get(str(item), 0) + 1
+                elif col.type is ColumnType.boolean:
+                    key = "true" if v is True else "false" if v is False else ""
+                    if key:
+                        counter[key] = counter.get(key, 0) + 1
+                elif v not in (None, ""):
+                    counter[str(v)] = counter.get(str(v), 0) + 1
+            if not counter:
+                continue
+            opts = {str(o["value"]): o for o in (col.config or {}).get("options", [])}
+            entries: list[ColumnValueCount] = []
+            for val, cnt in sorted(counter.items(), key=lambda kv: (-kv[1], kv[0])):
+                if col.type is ColumnType.boolean:
+                    label, color = ("Ha" if val == "true" else "Yo'q"), None
+                else:
+                    o = opts.get(val)
+                    label = str(o["label"]) if o else val
+                    color = o.get("color") if o else None
+                entries.append(
+                    ColumnValueCount(value=val, label=label, count=cnt, color=color)
+                )
+            by_column[col.key] = entries
+
+    return TableStatsOut(
+        total=total, done=done, updated_at=table.updated_at, by_column=by_column
     )
 
 

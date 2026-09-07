@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Archive, Columns3, Database, Plus, Rows3 } from "lucide-react";
+import { Archive, Columns3, Database, Plus, Rows3, Search } from "lucide-react";
 import { api, apiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -9,15 +9,26 @@ import {
   writableSectionsFor,
   type DynamicTable,
   type TablePage,
+  type TableSection,
 } from "@/lib/types";
-import { relativeTime } from "@/lib/utils";
+import { cn, relativeTime } from "@/lib/utils";
 import { PageTransition } from "@/components/PageTransition";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NewTableDialog } from "@/pages/tables/NewTableDialog";
+
+type SortKey = "name" | "updated" | "rows";
+type SectionFilter = "all" | TableSection;
+
+const SORT_LABELS: Record<SortKey, string> = {
+  name: "Nom",
+  updated: "Oxirgi o'zgarish",
+  rows: "Qator soni",
+};
 
 export function TablesListPage() {
   const { user } = useAuth();
@@ -26,6 +37,10 @@ export function TablesListPage() {
   const [error, setError] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+
+  const [query, setQuery] = useState("");
+  const [sectionFilter, setSectionFilter] = useState<SectionFilter>("all");
+  const [sortBy, setSortBy] = useState<SortKey>("name");
 
   const load = useCallback(async () => {
     try {
@@ -42,7 +57,33 @@ export function TablesListPage() {
     void load();
   }, [load]);
 
-  const grouped = groupBySection(tables ?? []);
+  const filtered = useMemo(() => {
+    let items = tables ?? [];
+    const q = query.trim().toLowerCase();
+    if (q) items = items.filter((t) => t.name.toLowerCase().includes(q));
+    if (sectionFilter !== "all") items = items.filter((t) => t.section === sectionFilter);
+    const sorted = [...items].sort((a, b) => {
+      if (sortBy === "name") return a.name.localeCompare(b.name);
+      if (sortBy === "rows") return b.row_count - a.row_count;
+      return b.updated_at.localeCompare(a.updated_at);
+    });
+    return sorted;
+  }, [tables, query, sectionFilter, sortBy]);
+
+  const totals = useMemo(
+    () => ({
+      tables: filtered.length,
+      rows: filtered.reduce((s, t) => s + t.row_count, 0),
+      done: filtered.reduce((s, t) => s + t.done_count, 0),
+    }),
+    [filtered],
+  );
+
+  const grouped = groupBySection(filtered);
+  const sectionsPresent = useMemo(
+    () => Array.from(new Set((tables ?? []).map((t) => t.section))),
+    [tables],
+  );
 
   return (
     <PageTransition>
@@ -75,6 +116,63 @@ export function TablesListPage() {
         </div>
       )}
 
+      {tables && tables.length > 0 && (
+        <div className="mb-5 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-56">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-content-faint" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Jadval nomi bo'yicha"
+                className="h-9 pl-9"
+                aria-label="Jadvallarni qidirish"
+              />
+            </div>
+
+            {sectionsPresent.length > 1 && (
+              <div className="flex items-center gap-1 rounded-md border border-line-strong p-0.5">
+                {(["all", ...sectionsPresent] as SectionFilter[]).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setSectionFilter(s)}
+                    className={cn(
+                      "rounded px-2 py-1 text-2xs font-medium transition-colors",
+                      sectionFilter === s
+                        ? "bg-accent-soft text-content"
+                        : "text-content-muted hover:text-content",
+                    )}
+                  >
+                    {s === "all" ? "Hammasi" : SECTION_LABELS[s]}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <label className="flex items-center gap-1.5 text-2xs text-content-muted">
+              Saralash:
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortKey)}
+                className="h-9 rounded-md border border-line-strong bg-surface-raised px-2 text-xs text-content outline-none focus:border-accent"
+              >
+                {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
+                  <option key={k} value={k}>
+                    {SORT_LABELS[k]}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <span className="ml-auto text-2xs text-content-faint">
+              {totals.tables} jadval · {totals.rows} qator
+              {totals.done > 0 && ` · ${totals.done} bajarilgan`}
+            </span>
+          </div>
+        </div>
+      )}
+
       {!tables && (
         <div className="grid grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -96,6 +194,12 @@ export function TablesListPage() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {tables && tables.length > 0 && filtered.length === 0 && (
+        <p className="py-10 text-center text-sm text-content-muted">
+          Filtrga mos jadval topilmadi.
+        </p>
       )}
 
       {tables &&
@@ -143,6 +247,22 @@ export function TablesListPage() {
                           </span>
                           <span className="ml-auto">{relativeTime(t.updated_at)}</span>
                         </div>
+
+                        {t.done_count > 0 && t.row_count > 0 && (
+                          <div className="flex items-center gap-2">
+                            <span className="h-1 flex-1 overflow-hidden rounded-full bg-surface-overlay">
+                              <span
+                                className="block h-full rounded-full bg-success"
+                                style={{
+                                  width: `${Math.min(100, Math.round((t.done_count / t.row_count) * 100))}%`,
+                                }}
+                              />
+                            </span>
+                            <span className="text-2xs tabular-nums text-content-faint">
+                              {t.done_count}/{t.row_count}
+                            </span>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   </Link>
