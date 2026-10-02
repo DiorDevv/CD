@@ -41,6 +41,11 @@ const NAV: Record<Role, NavItem[]> = {
     { to: "/dlp/dashboard", label: "DLP paneli", icon: DatabaseZap },
     { to: "/tables", label: "Jadvallar", icon: Table2 },
   ],
+  soc_dlp_admin: [
+    { to: "/soc/dashboard", label: "SOC paneli", icon: ShieldAlert },
+    { to: "/dlp/dashboard", label: "DLP paneli", icon: DatabaseZap },
+    { to: "/tables", label: "Jadvallar", icon: Table2 },
+  ],
   viewer: [
     { to: "/viewer/dashboard", label: "Umumiy ko'rinish", icon: Eye },
     { to: "/tables", label: "Jadvallar", icon: Table2 },

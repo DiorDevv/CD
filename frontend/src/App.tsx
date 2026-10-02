@@ -20,7 +20,7 @@ import {
 import { TablesListPage } from "@/pages/tables/TablesListPage";
 import { TableGridPage } from "@/pages/tables/TableGridPage";
 
-const ALL_ROLES = ["super_admin", "soc_admin", "dlp_admin", "viewer"] as const;
+const ALL_ROLES = ["super_admin", "soc_admin", "dlp_admin", "soc_dlp_admin", "viewer"] as const;
 
 /** "/" ga kirilganda role bo'yicha to'g'ri dashboard'ga yo'naltirish */
 function RootRedirect() {
@@ -55,11 +55,11 @@ export default function App() {
                 <Route path="/super-admin/audit-logs" element={<AuditLogsPage />} />
               </Route>
 
-              <Route element={<ProtectedRoute roles={["soc_admin", "super_admin"]} />}>
+              <Route element={<ProtectedRoute roles={["soc_admin", "soc_dlp_admin", "super_admin"]} />}>
                 <Route path="/soc/dashboard" element={<SocDashboardPage />} />
               </Route>
 
-              <Route element={<ProtectedRoute roles={["dlp_admin", "super_admin"]} />}>
+              <Route element={<ProtectedRoute roles={["dlp_admin", "soc_dlp_admin", "super_admin"]} />}>
                 <Route path="/dlp/dashboard" element={<DlpDashboardPage />} />
               </Route>
 

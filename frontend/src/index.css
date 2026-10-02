@@ -78,6 +78,9 @@
   [data-role="dlp"] {
     --accent: 264 72% 66%;
   }
+  [data-role="soc_dlp"] {
+    --accent: 238 76% 66%; /* SOC ko'ki va DLP binafshasi orasida */
+  }
   [data-role="viewer"] {
     --accent: 174 58% 48%;
   }
@@ -92,6 +95,9 @@
   }
   :root[data-theme="light"] [data-role="dlp"] {
     --accent: 264 50% 52%;
+  }
+  :root[data-theme="light"] [data-role="soc_dlp"] {
+    --accent: 238 52% 50%;
   }
   :root[data-theme="light"] [data-role="viewer"] {
     --accent: 176 64% 29%;

@@ -141,10 +141,17 @@ def forbid_roles(*roles: UserRole | str):
 
 
 # Bo'limlarga kirish uchun tayyor dependency'lar (keyingi bosqichda jadvallar shu bilan himoyalanadi)
-soc_read = require_role(UserRole.super_admin, UserRole.soc_admin, UserRole.viewer)
-soc_write = require_role(UserRole.super_admin, UserRole.soc_admin)
-dlp_read = require_role(UserRole.super_admin, UserRole.dlp_admin, UserRole.viewer)
-dlp_write = require_role(UserRole.super_admin, UserRole.dlp_admin)
+soc_read = require_role(
+    UserRole.super_admin, UserRole.soc_admin, UserRole.soc_dlp_admin, UserRole.viewer
+)
+soc_write = require_role(UserRole.super_admin, UserRole.soc_admin, UserRole.soc_dlp_admin)
+dlp_read = require_role(
+    UserRole.super_admin, UserRole.dlp_admin, UserRole.soc_dlp_admin, UserRole.viewer
+)
+dlp_write = require_role(UserRole.super_admin, UserRole.dlp_admin, UserRole.soc_dlp_admin)
+
+_SOC_ROLES = (UserRole.soc_admin, UserRole.soc_dlp_admin)
+_DLP_ROLES = (UserRole.dlp_admin, UserRole.soc_dlp_admin)
 
 
 # --- Dinamik jadval bo'lim ruxsatlari (section per-table, DB'dan olinadi) ------
@@ -157,9 +164,9 @@ def can_read_section(user: User, section: str) -> bool:
     if section == "shared":
         return True
     if section == "soc":
-        return role is UserRole.soc_admin
+        return role in _SOC_ROLES
     if section == "dlp":
-        return role is UserRole.dlp_admin
+        return role in _DLP_ROLES
     return False
 
 
@@ -170,11 +177,11 @@ def can_write_section(user: User, section: str) -> bool:
     if role is UserRole.super_admin:
         return True
     if section == "shared":
-        return role in (UserRole.soc_admin, UserRole.dlp_admin)
+        return role in (UserRole.soc_admin, UserRole.dlp_admin, UserRole.soc_dlp_admin)
     if section == "soc":
-        return role is UserRole.soc_admin
+        return role in _SOC_ROLES
     if section == "dlp":
-        return role is UserRole.dlp_admin
+        return role in _DLP_ROLES
     return False
 
 

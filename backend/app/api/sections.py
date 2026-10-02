@@ -5,6 +5,7 @@ Hozircha maqsad — RBAC dependency'lari ishlashini ko'rsatish:
   * viewer  -> faqat GET (read)
   * soc_admin -> DLP'ga umuman kira olmaydi
   * dlp_admin -> SOC'ga umuman kira olmaydi
+  * soc_dlp_admin -> SOC va DLP, ikkalasiga ham (o'qish + yozish)
 """
 
 from fastapi import APIRouter, Depends

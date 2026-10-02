@@ -7,7 +7,12 @@ from app.core.passwords import validate_password_strength
 from app.models.user import UserRole
 
 # viewer/admin yaratish mumkin bo'lgan rollar (super_admin bu ro'yxatda YO'Q)
-CREATABLE_ROLES = {UserRole.soc_admin, UserRole.dlp_admin, UserRole.viewer}
+CREATABLE_ROLES = {
+    UserRole.soc_admin,
+    UserRole.dlp_admin,
+    UserRole.soc_dlp_admin,
+    UserRole.viewer,
+}
 
 USERNAME_RE = r"^[a-zA-Z0-9._-]{3,64}$"
 
@@ -36,7 +41,7 @@ class UserCreate(BaseModel):
     def _validate(self) -> "UserCreate":
         if self.role not in CREATABLE_ROLES:
             raise ValueError(
-                "Faqat soc_admin, dlp_admin yoki viewer roli yaratilishi mumkin"
+                "Faqat soc_admin, dlp_admin, soc_dlp_admin yoki viewer roli yaratilishi mumkin"
             )
         # Vaqtinchalik parol ham to'liq siyosatga bo'ysunadi
         validate_password_strength(self.temporary_password, username=self.username)

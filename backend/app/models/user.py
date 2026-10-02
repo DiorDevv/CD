@@ -13,6 +13,7 @@ class UserRole(str, enum.Enum):
     super_admin = "super_admin"
     soc_admin = "soc_admin"
     dlp_admin = "dlp_admin"
+    soc_dlp_admin = "soc_dlp_admin"  # SOC va DLP — ikkalasi (yozish bilan)
     viewer = "viewer"
 
 

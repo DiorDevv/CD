@@ -1,4 +1,4 @@
-export type Role = "super_admin" | "soc_admin" | "dlp_admin" | "viewer";
+export type Role = "super_admin" | "soc_admin" | "dlp_admin" | "soc_dlp_admin" | "viewer";
 
 export interface User {
   id: string;
@@ -271,7 +271,7 @@ export const SECTION_LABELS: Record<TableSection, string> = {
 
 /** Rol asosida yozish mumkin bo'lgan bo'limlar (backend bilan bir xil qoida). */
 export function writableSectionsFor(role: Role): TableSection[] {
-  if (role === "super_admin") return ["soc", "dlp", "shared"];
+  if (role === "super_admin" || role === "soc_dlp_admin") return ["soc", "dlp", "shared"];
   if (role === "soc_admin") return ["soc", "shared"];
   if (role === "dlp_admin") return ["dlp", "shared"];
   return [];
@@ -281,6 +281,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   super_admin: "Super Admin",
   soc_admin: "SOC Admin",
   dlp_admin: "DLP Admin",
+  soc_dlp_admin: "SOC + DLP Admin",
   viewer: "Kuzatuvchi",
 };
 
@@ -289,6 +290,7 @@ export const ROLE_HOME: Record<Role, string> = {
   super_admin: "/super-admin/dashboard",
   soc_admin: "/soc/dashboard",
   dlp_admin: "/dlp/dashboard",
+  soc_dlp_admin: "/soc/dashboard",
   viewer: "/viewer/dashboard",
 };
 
@@ -296,6 +298,7 @@ export const ROLE_HOME: Record<Role, string> = {
 export function roleAccent(role: Role): string {
   if (role === "soc_admin") return "soc";
   if (role === "dlp_admin") return "dlp";
+  if (role === "soc_dlp_admin") return "soc_dlp";
   if (role === "viewer") return "viewer";
   return "super_admin";
 }

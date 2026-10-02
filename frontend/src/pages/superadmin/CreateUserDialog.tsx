@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { MIN_PASSWORD, randomPassword } from "@/lib/password";
 
-const CREATABLE: Role[] = ["soc_admin", "dlp_admin", "viewer"];
+const CREATABLE: Role[] = ["soc_admin", "dlp_admin", "soc_dlp_admin", "viewer"];
 
 interface Props {
   open: boolean;
@@ -133,7 +133,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: Props) {
               <div
                 role="radiogroup"
                 aria-labelledby="cu-role-label"
-                className="grid grid-cols-3 gap-2"
+                className="grid grid-cols-2 gap-2"
                 onKeyDown={(e) => {
                   if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
                   e.preventDefault();

@@ -28,6 +28,7 @@ Ichki monitoring platformasi.
 | `super_admin` | Faqat seed skript orqali yaratiladi. User CRUD, block/unblock, audit log. |
 | `soc_admin`   | Faqat SOC bo'limi. DLP'ga kira olmaydi. |
 | `dlp_admin`   | Faqat DLP bo'limi. SOC'ga kira olmaydi. |
+| `soc_dlp_admin` | SOC **va** DLP bo'limlari (o'qish + yozish). Admin panelga kira olmaydi, jadvalni butunlay o'chira olmaydi. |
 | `viewer`      | SOC + DLP — **faqat o'qish** (backend darajasida ham). |
 
 ### Xavfsizlik xususiyatlari
@@ -213,7 +214,7 @@ npm run dev
 | POST | `/api/auth/logout` | refresh cookie | refresh tokenni bekor qiladi |
 | POST | `/api/auth/change-password` | auth | parolni o'zgartiradi, sessiyalarni tozalaydi |
 | GET  | `/api/users/me` | auth | joriy foydalanuvchi |
-| POST | `/api/admin/users` | super_admin | yangi admin/viewer yaratish |
+| POST | `/api/admin/users` | super_admin | yangi admin/viewer yaratish (`soc_admin`, `dlp_admin`, `soc_dlp_admin`, `viewer`) |
 | GET  | `/api/admin/users` | super_admin | sahifalangan ro'yxat: `{items,total,limit,offset}` (`?role=` `?is_active=` `?q=` `?limit=` `?offset=`) |
 | PATCH | `/api/admin/users/{id}/block` | super_admin | bloklash (sessiyalar + access token bekor) |
 | PATCH | `/api/admin/users/{id}/unblock` | super_admin | faollashtirish |
@@ -221,13 +222,13 @@ npm run dev
 | DELETE | `/api/admin/users/{id}` | super_admin | o'chirish |
 | GET  | `/api/admin/audit-logs` | super_admin | audit jurnali (filtrlash + pagination) |
 | GET  | `/api/users/directory` | auth | faol foydalanuvchilar ro'yxati (`user` turidagi ustunlar uchun) |
-| GET/POST | `/api/soc/overview` | SOC (yozish: soc_admin) | placeholder — RBAC namoyishi |
-| GET/POST | `/api/dlp/overview` | DLP (yozish: dlp_admin) | placeholder — RBAC namoyishi |
+| GET/POST | `/api/soc/overview` | SOC (yozish: soc_admin, soc_dlp_admin) | placeholder — RBAC namoyishi |
+| GET/POST | `/api/dlp/overview` | DLP (yozish: dlp_admin, soc_dlp_admin) | placeholder — RBAC namoyishi |
 
 ### Dinamik jadvallar (2-bosqich)
 
 Bo'lim bo'yicha ruxsat: `super_admin` = hammasi RW · `soc_admin` = `soc`+`shared` RW ·
-`dlp_admin` = `dlp`+`shared` RW · `viewer` = hammasi faqat o'qish (backend'da qat'iy).
+`dlp_admin` = `dlp`+`shared` RW · `soc_dlp_admin` = `soc`+`dlp`+`shared` RW · `viewer` = hammasi faqat o'qish (backend'da qat'iy).
 
 | Metod | Yo'l | Tavsif |
 |-------|------|--------|
