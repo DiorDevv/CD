@@ -12,7 +12,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import can_read_section, can_write_section, get_current_active_user
+from app.api.deps import (
+    can_modify_owned,
+    can_read_section,
+    can_write_section,
+    get_current_active_user,
+)
 from app.database import get_db
 from app.models.dynamic import (
     ColumnType,
@@ -100,6 +105,12 @@ def _guard_todo_write(user: User, section: str, todo: SectionTodo) -> None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Topshiriq topilmadi")
     else:
         _guard_write(user, section)
+        # Umumiy topshiriqni (matn, muddat, "bajarildi", o'chirish) — muallifi yoki super admin.
+        if not can_modify_owned(user, todo.owner_id):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Bu topshiriqni faqat uni yozgan foydalanuvchi yoki super admin o'zgartira oladi",
+            )
 
 
 @router.get("/{section}/todos", response_model=list[TodoOut])

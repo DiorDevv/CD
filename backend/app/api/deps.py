@@ -193,6 +193,14 @@ def writable_sections(user: User) -> list[str]:
     return [s for s in ("soc", "dlp", "shared") if can_write_section(user, s)]
 
 
+def can_modify_owned(user: User, owner_id: uuid.UUID | None) -> bool:
+    """Mualliflik qoidasi: yozuvni (qator, jadval tuzilishi, umumiy topshiriq) super admin
+    yoki uning muallifi o'zgartiradi. Muallifi noma'lum eski yozuv — faqat super admin."""
+    if user.role is UserRole.super_admin:
+        return True
+    return owner_id is not None and owner_id == user.id
+
+
 __all__ = [
     "get_current_user",
     "get_current_active_user",
@@ -207,4 +215,5 @@ __all__ = [
     "can_write_section",
     "readable_sections",
     "writable_sections",
+    "can_modify_owned",
 ]

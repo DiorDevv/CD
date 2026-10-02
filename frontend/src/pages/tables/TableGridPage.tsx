@@ -28,7 +28,7 @@ import { api, apiError, apiStatus, fieldErrors } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useDirectory } from "@/lib/directory";
 import { defaultCellValue, ROW_DONE_KEY, typeMeta } from "@/lib/dynamic";
-import { writableSectionsFor, SECTION_LABELS } from "@/lib/types";
+import { canModifyOwned, writableSectionsFor, SECTION_LABELS } from "@/lib/types";
 import type {
   DynamicColumn,
   DynamicRow,
@@ -132,6 +132,8 @@ export function TableGridPage() {
     [draftW],
   );
 
+  // canWrite — bo'limga yozish (yangi qator qo'shish); mavjud qator va jadval tuzilishi uchun
+  // qo'shimcha mualliflik sharti (backend bilan bir xil): canEditRow / canManage.
   const canWrite =
     !!table &&
     !!user &&
@@ -139,6 +141,9 @@ export function TableGridPage() {
     writableSectionsFor(user.role).includes(table.section) &&
     !table.is_archived;
   const isSuper = user?.role === "super_admin";
+  const ownsTable = !!table && canModifyOwned(user, table.created_by);
+  const canManage = canWrite && ownsTable;
+  const canEditRow = (row: DynamicRow) => canWrite && canModifyOwned(user, row.created_by);
 
   const sortedCols = useMemo(
     () => (table ? [...table.columns].sort((a, b) => a.position - b.position) : []),
@@ -332,10 +337,10 @@ export function TableGridPage() {
         break;
       case "Enter":
       case "F2": {
-        if (!canWrite) return;
-        e.preventDefault();
         const col = sortedCols[c];
         const row = rows[r];
+        if (!canEditRow(row)) return;
+        e.preventDefault();
         if (col.type === "boolean") {
           void commitCell(row, col, !row.data[col.key]);
         } else {
@@ -348,10 +353,10 @@ export function TableGridPage() {
         return;
       case "Backspace":
       case "Delete": {
-        if (!canWrite) return;
-        e.preventDefault();
         const col = sortedCols[c];
         const row = rows[r];
+        if (!canEditRow(row)) return;
+        e.preventDefault();
         if (col.type !== "boolean") void commitCell(row, col, null);
         return;
       }
@@ -566,7 +571,7 @@ export function TableGridPage() {
             Jadvallar
           </Link>
           <div className="flex items-center gap-2.5">
-            {canWrite ? (
+            {canManage ? (
               <input
                 defaultValue={table.name}
                 onBlur={(e) => renameTable(e.target.value)}
@@ -602,17 +607,17 @@ export function TableGridPage() {
               aria-label="Qatorlar orasida qidirish"
             />
           </div>
+          {canManage && (
+            <Button variant="secondary" onClick={() => setColDialog({ open: true, column: null })}>
+              <Plus className="h-4 w-4" />
+              Ustun
+            </Button>
+          )}
           {canWrite && (
-            <>
-              <Button variant="secondary" onClick={() => setColDialog({ open: true, column: null })}>
-                <Plus className="h-4 w-4" />
-                Ustun
-              </Button>
-              <Button onClick={() => setNewRowOpen(true)} disabled={sortedCols.length === 0}>
-                <Plus className="h-4 w-4" />
-                Qator
-              </Button>
-            </>
+            <Button onClick={() => setNewRowOpen(true)} disabled={sortedCols.length === 0}>
+              <Plus className="h-4 w-4" />
+              Qator
+            </Button>
           )}
           <Dropdown>
             <DropdownTrigger asChild>
@@ -633,7 +638,8 @@ export function TableGridPage() {
               )}
               {(canWrite || table.is_archived) &&
                 writableSectionsFor(user?.role ?? "viewer").includes(table.section) &&
-                user?.role !== "viewer" && (
+                user?.role !== "viewer" &&
+                ownsTable && (
                   <>
                     <DropdownSeparator />
                     <DropdownItem onSelect={toggleArchive}>
@@ -819,8 +825,8 @@ export function TableGridPage() {
                 return (
                   <th
                     key={col.id}
-                    onDragEnter={() => canWrite && setDragOverCol(i)}
-                    onDragOver={(e) => canWrite && e.preventDefault()}
+                    onDragEnter={() => canManage && setDragOverCol(i)}
+                    onDragOver={(e) => canManage && e.preventDefault()}
                     className={cn(
                       "group relative border-b border-l border-line px-3 py-2 text-left align-middle font-medium",
                       dragOverCol === i && "bg-accent-soft",
@@ -830,7 +836,7 @@ export function TableGridPage() {
                       <meta.icon className="h-3.5 w-3.5 shrink-0 text-content-faint" />
                       <button
                         onClick={() => cycleSort(col.key)}
-                        draggable={canWrite}
+                        draggable={canManage}
                         onDragStart={() => (dragCol.current = i)}
                         onDragEnd={() => {
                           if (dragCol.current !== null && dragOverCol !== null) {
@@ -841,16 +847,16 @@ export function TableGridPage() {
                         }}
                         className={cn(
                           "flex items-center gap-1 truncate text-content-muted hover:text-content",
-                          canWrite && "cursor-grab active:cursor-grabbing",
+                          canManage && "cursor-grab active:cursor-grabbing",
                         )}
-                        title="Saralash · sudrab tartiblang"
+                        title={canManage ? "Saralash · sudrab tartiblang" : "Saralash"}
                       >
                         <span className="truncate">{col.label}</span>
                         {col.config.required && <span className="text-danger">*</span>}
                         {sortState === "asc" && <ChevronUp className="h-3 w-3" />}
                         {sortState === "desc" && <ChevronDown className="h-3 w-3" />}
                       </button>
-                      {canWrite && (
+                      {canManage && (
                         <Dropdown>
                           <DropdownTrigger asChild>
                             <button
@@ -884,7 +890,7 @@ export function TableGridPage() {
                         </Dropdown>
                       )}
                     </div>
-                    {canWrite && (
+                    {canManage && (
                       <span
                         onMouseDown={(e) => startResize(e, col)}
                         onClick={(e) => e.stopPropagation()}
@@ -913,7 +919,7 @@ export function TableGridPage() {
             {!showSkeleton && sortedCols.length === 0 && (
               <tr>
                 <td colSpan={2} className="py-16 text-center text-sm text-content-muted">
-                  {canWrite ? "Boshlash uchun ustun qo'shing." : "Ustunlar yo'q."}
+                  {canManage ? "Boshlash uchun ustun qo'shing." : "Ustunlar yo'q."}
                 </td>
               </tr>
             )}
@@ -932,6 +938,7 @@ export function TableGridPage() {
             {!showSkeleton &&
               rows.map((row, rIdx) => {
                 const rowDone = !!row.data[ROW_DONE_KEY];
+                const rowEditable = canEditRow(row);
                 return (
                 <tr
                   key={row.id}
@@ -939,9 +946,14 @@ export function TableGridPage() {
                     "group hover:bg-surface-overlay/40",
                     rowDone && "opacity-55",
                   )}
+                  title={
+                    canWrite && !rowEditable
+                      ? `Muallif: ${(row.created_by && usernameById.get(row.created_by)) || "noma'lum"} — faqat u yoki super admin o'zgartiradi`
+                      : undefined
+                  }
                 >
                   <td className="border-b border-line p-0 text-center">
-                    {canWrite ? (
+                    {rowEditable ? (
                       <button
                         type="button"
                         onClick={() => toggleRowDone(row)}
@@ -1013,7 +1025,7 @@ export function TableGridPage() {
                           <div className="flex min-h-[36px] items-center px-3 py-1.5">
                             <button
                               type="button"
-                              disabled={!canWrite || saving}
+                              disabled={!rowEditable || saving}
                               onClick={() => commitCell(row, col, !row.data[col.key])}
                               aria-pressed={!!row.data[col.key]}
                               title={row.data[col.key] ? "Bajarilgan" : "Bajarilmagan"}
@@ -1022,7 +1034,7 @@ export function TableGridPage() {
                                 row.data[col.key]
                                   ? "border-success bg-success/20 text-success"
                                   : "border-danger/40 bg-danger/10 text-danger",
-                                (!canWrite || saving) && "opacity-50",
+                                (!rowEditable || saving) && "opacity-50",
                               )}
                             >
                               {row.data[col.key] ? (
@@ -1035,13 +1047,13 @@ export function TableGridPage() {
                         ) : (
                           <button
                             type="button"
-                            disabled={!canWrite}
+                            disabled={!rowEditable}
                             onClick={() =>
-                              canWrite && setEditing({ rowId: row.id, key: col.key })
+                              rowEditable && setEditing({ rowId: row.id, key: col.key })
                             }
                             className={cn(
                               "flex min-h-[36px] w-full items-start px-3 py-1.5 text-left",
-                              canWrite && "hover:bg-surface-overlay/60",
+                              rowEditable && "hover:bg-surface-overlay/60",
                               saving && "opacity-50",
                               rowDone && "text-content-faint line-through",
                             )}
@@ -1081,16 +1093,18 @@ export function TableGridPage() {
                           >
                             <Copy className="h-3.5 w-3.5" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-content-faint hover:text-danger"
-                            onClick={() => setPendingDeleteRow(row)}
-                            aria-label="Qatorni o'chirish"
-                            title="O'chirish"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          {rowEditable && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-content-faint hover:text-danger"
+                              onClick={() => setPendingDeleteRow(row)}
+                              aria-label="Qatorni o'chirish"
+                              title="O'chirish"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </>
                       )}
                     </div>
@@ -1223,7 +1237,10 @@ export function TableGridPage() {
         tableId={tableId}
         rowId={historyRowId}
         columns={sortedCols}
-        canWrite={canWrite}
+        canWrite={(() => {
+          const r = rows.find((x) => x.id === historyRowId);
+          return !!r && canEditRow(r);
+        })()}
         onOpenChange={(v) => !v && setHistoryRowId(null)}
         onRestored={() => {
           void loadRows();

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import (
+    can_modify_owned,
     can_read_section,
     can_write_section,
     get_current_active_user,
@@ -87,6 +88,27 @@ def _guard_read(user: User, table: DynamicTable) -> None:
 def _guard_write(user: User, section: str) -> None:
     if not can_write_section(user, section):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Bu bo'lim uchun yozish ruxsati yo'q")
+
+
+# Mualliflik qoidasi: bo'limga yozish huquqi qator QO'SHISH uchun yetarli; mavjud qatorni
+# o'zgartirish, o'chirish, tiklash — faqat uni yozgan foydalanuvchi yoki super admin.
+# Jadval tuzilishi (nom, ustunlar, arxiv) — jadval yaratuvchisi yoki super admin:
+# ustun o'chirilsa, boshqalarning qatorlaridagi qiymat ham yo'qoladi.
+def _guard_table_owner(user: User, table: DynamicTable) -> None:
+    _guard_write(user, table.section.value)
+    if not can_modify_owned(user, table.created_by):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Jadval tuzilishini faqat uni yaratgan foydalanuvchi yoki super admin o'zgartira oladi",
+        )
+
+
+def _guard_row_owner(user: User, row: DynamicRow) -> None:
+    if not can_modify_owned(user, row.created_by):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Bu qatorni faqat uni yozgan foydalanuvchi yoki super admin o'zgartira oladi",
+        )
 
 
 # `data->>'__done' == 'true'` — JSONB'da belgilangan qatorlar sharti
@@ -293,7 +315,7 @@ async def update_table(
     user: User = Depends(get_current_active_user),
 ) -> TableDetailOut:
     table = await _load_table(db, table_id)
-    _guard_write(user, table.section.value)
+    _guard_table_owner(user, table)
 
     action = AuditAction.TABLE_UPDATED
     if payload.name is not None and payload.name.strip() != table.name:
@@ -365,7 +387,7 @@ async def add_column(
     user: User = Depends(get_current_active_user),
 ) -> ColumnOut:
     table = await _load_table(db, table_id)
-    _guard_write(user, table.section.value)
+    _guard_table_owner(user, table)
     try:
         cfg = normalize_column_config(payload.type, payload.config)
     except ValueError as exc:
@@ -407,7 +429,7 @@ async def update_column(
     user: User = Depends(get_current_active_user),
 ) -> ColumnOut:
     table = await _load_table(db, table_id)
-    _guard_write(user, table.section.value)
+    _guard_table_owner(user, table)
     col = _get_column(table, column_id)
 
     target_type = payload.type or col.type
@@ -497,7 +519,7 @@ async def delete_column(
     user: User = Depends(get_current_active_user),
 ) -> MessageOut:
     table = await _load_table(db, table_id)
-    _guard_write(user, table.section.value)
+    _guard_table_owner(user, table)
     col = _get_column(table, column_id)
     key = col.key
 
@@ -528,7 +550,7 @@ async def reorder_columns(
     user: User = Depends(get_current_active_user),
 ) -> list[ColumnOut]:
     table = await _load_table(db, table_id)
-    _guard_write(user, table.section.value)
+    _guard_table_owner(user, table)
     by_id = {c.id: c for c in table.columns}
     if {i.id for i in payload.items} - set(by_id):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Noma'lum ustun identifikatori")
@@ -793,6 +815,7 @@ async def update_row(
     row = await db.get(DynamicRow, row_id)
     if row is None or row.table_id != table.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Qator topilmadi")
+    _guard_row_owner(user, row)
 
     if payload.expected_updated_at is not None:
         exp = payload.expected_updated_at
@@ -834,6 +857,7 @@ async def delete_row(
     row = await db.get(DynamicRow, row_id)
     if row is None or row.table_id != table.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Qator topilmadi")
+    _guard_row_owner(user, row)
     db.add(_revision(table.id, row.id, "delete", dict(row.data), user.id))
     await db.delete(row)
     await _touch_table(db, table.id)
@@ -858,6 +882,7 @@ async def restore_revision(
     row = await db.get(DynamicRow, row_id)
     if row is None or row.table_id != table.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Qator topilmadi")
+    _guard_row_owner(user, row)
 
     rev = await db.get(DynamicRowRevision, revision_id)
     if rev is None or rev.row_id != row_id or rev.table_id != table.id:

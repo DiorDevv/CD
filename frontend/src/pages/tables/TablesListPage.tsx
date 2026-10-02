@@ -17,6 +17,7 @@ import { api, apiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import {
   SECTION_LABELS,
+  canModifyOwned,
   writableSectionsFor,
   type DynamicTable,
   type TablePage,
@@ -63,9 +64,12 @@ export function TablesListPage() {
   const [pendingDelete, setPendingDelete] = useState<DynamicTable | null>(null);
 
   const isSuper = user?.role === "super_admin";
+  // Arxivlash — jadval tuzilishi amali: bo'limga yozish + jadval yaratuvchisi yoki super admin.
   const canManage = useCallback(
     (t: DynamicTable) =>
-      !!user && writableSectionsFor(user.role).includes(t.section),
+      !!user &&
+      writableSectionsFor(user.role).includes(t.section) &&
+      canModifyOwned(user, t.created_by),
     [user],
   );
 

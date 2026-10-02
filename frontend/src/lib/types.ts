@@ -277,6 +277,14 @@ export function writableSectionsFor(role: Role): TableSection[] {
   return [];
 }
 
+/** Mualliflik qoidasi (backend `can_modify_owned` bilan bir xil): mavjud qator, jadval tuzilishi va
+ *  umumiy topshiriqni super admin yoki uning muallifi o'zgartiradi. Muallifi noma'lum — faqat super admin. */
+export function canModifyOwned(user: Pick<User, "id" | "role"> | null | undefined, ownerId: string | null): boolean {
+  if (!user) return false;
+  if (user.role === "super_admin") return true;
+  return ownerId !== null && ownerId === user.id;
+}
+
 export const ROLE_LABELS: Record<Role, string> = {
   super_admin: "Super Admin",
   soc_admin: "SOC Admin",

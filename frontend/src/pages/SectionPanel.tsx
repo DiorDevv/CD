@@ -11,7 +11,7 @@ import {
 import { toast } from "sonner";
 import { api, apiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { writableSectionsFor } from "@/lib/types";
+import { canModifyOwned, writableSectionsFor } from "@/lib/types";
 import type {
   SectionSummary,
   SectionTodo,
@@ -66,8 +66,12 @@ function TodoBlock({
   canWriteShared: boolean;
   icon: LucideIcon;
 }) {
+  const { user } = useAuth();
   const [scope, setScope] = useState<TodoScope>("personal");
   const [items, setItems] = useState<SectionTodo[] | null>(null);
+  // Shaxsiy — o'ziniki; umumiy — bo'limga yozish + muallif yoki super admin (backend bilan bir xil).
+  const canEditItem = (it: SectionTodo) =>
+    it.scope === "personal" || (canWriteShared && canModifyOwned(user, it.owner_id));
   const [text, setText] = useState("");
   const [due, setDue] = useState("");
   const [adding, setAdding] = useState(false);
@@ -213,7 +217,13 @@ function TodoBlock({
         ) : (
           <ul className="divide-y divide-line">
             {items.map((it) => (
-              <TodoRow key={it.id} item={it} onToggle={toggle} onRemove={remove} />
+              <TodoRow
+                key={it.id}
+                item={it}
+                editable={canEditItem(it)}
+                onToggle={toggle}
+                onRemove={remove}
+              />
             ))}
           </ul>
         )}
@@ -224,26 +234,33 @@ function TodoBlock({
 
 function TodoRow({
   item,
+  editable,
   onToggle,
   onRemove,
 }: {
   item: SectionTodo;
+  editable: boolean;
   onToggle: (i: SectionTodo) => void;
   onRemove: (i: SectionTodo) => void;
 }) {
   const overdue =
     !item.is_done && item.due_date != null && item.due_date < todayStr();
   return (
-    <li className="group flex items-center gap-2.5 py-2 text-sm">
+    <li
+      className="group flex items-center gap-2.5 py-2 text-sm"
+      title={editable ? undefined : "Faqat muallifi yoki super admin o'zgartiradi"}
+    >
       <button
         type="button"
-        onClick={() => onToggle(item)}
+        onClick={() => editable && onToggle(item)}
+        disabled={!editable}
         aria-pressed={item.is_done}
         className={cn(
           "inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors",
           item.is_done
             ? "border-success bg-success/20 text-success"
-            : "border-line-strong text-transparent hover:border-content-faint",
+            : "border-line-strong text-transparent",
+          editable ? !item.is_done && "hover:border-content-faint" : "cursor-default opacity-60",
         )}
       >
         <Check className="h-3 w-3" />
@@ -272,14 +289,16 @@ function TodoRow({
       <span className="hidden shrink-0 text-2xs text-content-faint sm:inline">
         {item.owner_name ?? "—"} · {relativeTime(item.created_at)}
       </span>
-      <button
-        type="button"
-        onClick={() => onRemove(item)}
-        className="shrink-0 rounded p-1 text-content-faint opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
-        aria-label="O'chirish"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </button>
+      {editable && (
+        <button
+          type="button"
+          onClick={() => onRemove(item)}
+          className="shrink-0 rounded p-1 text-content-faint opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
+          aria-label="O'chirish"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      )}
     </li>
   );
 }

@@ -230,6 +230,16 @@ npm run dev
 Bo'lim bo'yicha ruxsat: `super_admin` = hammasi RW · `soc_admin` = `soc`+`shared` RW ·
 `dlp_admin` = `dlp`+`shared` RW · `soc_dlp_admin` = `soc`+`dlp`+`shared` RW · `viewer` = hammasi faqat o'qish (backend'da qat'iy).
 
+**Mualliflik qoidasi** (RW ichida): bo'limga yozish huquqi jadval yaratish va **yangi qator qo'shish**
+(shu jumladan import, nusxalash) uchun yetarli. Mavjud yozuvni o'zgartirish esa faqat muallifga va
+`super_admin`'ga ruxsat etiladi (boshqalarga `403`):
+- qator — tahrirlash, "bajarildi" belgisi, o'chirish, tarixdan tiklash: qatorni yozgan foydalanuvchi;
+- jadval tuzilishi — nom, ustunlar (qo'shish/o'zgartirish/o'chirish/tartib), arxiv: jadval yaratuvchisi;
+- bo'lim panelidagi umumiy topshiriq — matn, muddat, "bajarildi", o'chirish: topshiriq muallifi.
+
+Muallifi noma'lum eski yozuvlarni faqat `super_admin` o'zgartiradi. Qoida `deps.can_modify_owned`
+da, frontend'da xuddi shu `canModifyOwned` (`lib/types.ts`).
+
 | Metod | Yo'l | Tavsif |
 |-------|------|--------|
 | GET/POST | `/api/tables` | sahifalangan ro'yxat (`?section=` `?include_archived=`) / jadval yaratish |
